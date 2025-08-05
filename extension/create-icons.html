@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Extension Icons</title>
+</head>
+<body>
+    <canvas id="canvas" width="128" height="128" style="border: 1px solid #ccc;"></canvas>
+    <br><br>
+    <button onclick="downloadIcon(16)">Download 16px</button>
+    <button onclick="downloadIcon(32)">Download 32px</button>
+    <button onclick="downloadIcon(48)">Download 48px</button>
+    <button onclick="downloadIcon(128)">Download 128px</button>
+    
+    <script>
+        function createIcon(size) {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size
+            canvas.width = size;
+            canvas.height = size;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, size, size);
+            
+            // Create gradient background
+            const gradient = ctx.createLinearGradient(0, 0, size, size);
+            gradient.addColorStop(0, '#4299e1');
+            gradient.addColorStop(1, '#667eea');
+            
+            // Draw background circle
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, size/2 - 2, 0, 2 * Math.PI);
+            ctx.fill();
+            
+            // Draw magnifying glass
+            ctx.strokeStyle = 'white';
+            ctx.fillStyle = 'white';
+            ctx.lineWidth = size * 0.08;
+            
+            // Glass circle
+            const glassRadius = size * 0.25;
+            const glassX = size * 0.4;
+            const glassY = size * 0.4;
+            
+            ctx.beginPath();
+            ctx.arc(glassX, glassY, glassRadius, 0, 2 * Math.PI);
+            ctx.stroke();
+            
+            // Handle
+            ctx.beginPath();
+            ctx.moveTo(glassX + glassRadius * 0.7, glassY + glassRadius * 0.7);
+            ctx.lineTo(size * 0.75, size * 0.75);
+            ctx.stroke();
+            
+            // DNS text
+            ctx.font = `bold ${size * 0.15}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.fillText('DNS', size/2, size * 0.85);
+            
+            return canvas;
+        }
+        
+        function downloadIcon(size) {
+            const canvas = createIcon(size);
+            const link = document.createElement('a');
+            link.download = `icon${size}.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+        
+        // Create default 128px icon on load
+        createIcon(128);
+    </script>
+</body>
+</html>

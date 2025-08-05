@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CIO DNS Checker v2.0</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <div class="container">
+                <h1 class="header-title">
+                    <span class="logo">🔍</span>
+                    CIO DNS Checker
+                </h1>
+                <p class="header-subtitle">Customer.io DNS Record Validation Tool</p>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="container">
+                <!-- Error Banner -->
+                <div id="error-banner" class="error-banner hidden">
+                    <div class="error-content">
+                        <span class="error-icon">⚠️</span>
+                        <span id="error-message"></span>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="loading-state" class="loading-state">
+                    <div class="spinner"></div>
+                    <p>Decoding DNS data and fetching records...</p>
+                </div>
+
+                <!-- No Data State -->
+                <div id="no-data-state" class="no-data-state hidden">
+                    <div class="no-data-content">
+                        <span class="no-data-icon">📋</span>
+                        <h2>No DNS Data Found</h2>
+                        <p>Please use the Customer.io bookmarklet to extract DNS records first.</p>
+                        <div class="instructions">
+                            <h3>How to use:</h3>
+                            <ol>
+                                <li>Navigate to Customer.io Sending Domains page</li>
+                                <li>Run the "CIO DIG" bookmarklet</li>
+                                <li>The tool will automatically open with your DNS data</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Container -->
+                <div id="results-container" class="results-container hidden">
+                    <div class="results-header">
+                        <h2>DNS Record Validation Results</h2>
+                        <div class="results-actions">
+                            <button id="toggle-debug" class="btn btn-outline">Show Debug Info</button>
+                            <button id="export-csv" class="btn btn-primary">Export CSV</button>
+                        </div>
+                    </div>
+
+                    <!-- Domain Cards Container -->
+                    <div id="domains-container" class="domains-container">
+                        <!-- Domain cards will be inserted here -->
+                    </div>
+
+                    <!-- Debug Panel -->
+                    <div id="debug-panel" class="debug-panel collapsed">
+                        <div class="debug-header">
+                            <h3>Debug Information</h3>
+                            <button id="copy-debug" class="btn btn-sm">Copy JSON</button>
+                        </div>
+                        <div class="debug-content">
+                            <pre id="debug-json"></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

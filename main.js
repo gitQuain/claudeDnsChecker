@@ -398,6 +398,21 @@ class CIODNSChecker {
         result.mismatches = [];
         result.extras = [];
 
+        // For verified domains with no expected records, treat all found records as informational
+        if (expected.length === 0) {
+            // All found records are informational for verified domains
+            for (const [type, records] of Object.entries(actual)) {
+                for (const actualRecord of records) {
+                    result.extras.push({
+                        type,
+                        ...actualRecord,
+                        status: 'info' // Use 'info' status for verified domain records
+                    });
+                }
+            }
+            return;
+        }
+
         // Check each expected record
         for (const expectedRecord of expected) {
             const actualRecords = actual[expectedRecord.type] || [];
@@ -645,7 +660,13 @@ class CIODNSChecker {
         const allRecords = [
             ...result.matches.map(m => ({ ...m.expected, status: 'pass', actual: m.actual })),
             ...result.mismatches.map(m => ({ ...m.expected, status: 'fail', actual: null })),
-            ...result.extras.map(e => ({ type: e.type, host: e.host, value: e.value, status: 'extra', actual: e }))
+            ...result.extras.map(e => ({ 
+                type: e.type, 
+                host: e.host, 
+                value: e.value, 
+                status: e.status, // Use the actual status (info, extra, etc)
+                actual: e 
+            }))
         ];
 
         if (allRecords.length === 0) {
@@ -690,11 +711,13 @@ class CIODNSChecker {
         const statusIcons = {
             'pass': '✅',
             'fail': '❌',
-            'extra': '➕'
+            'extra': '➕',
+            'info': 'ℹ️'  // Information icon for verified domain records
         };
 
         const actualValue = record.actual ? record.actual.value : '-';
-        const expectedValue = record.value || '-';
+        // For verified domains (info status), show the actual value as both expected and actual
+        const expectedValue = record.status === 'info' ? actualValue : (record.value || '-');
 
         return `
             <tr>
@@ -710,7 +733,7 @@ class CIODNSChecker {
                 </td>
                 <td>
                     <div class="record-status">
-                        <span class="status-icon">${statusIcons[record.status]}</span>
+                        <span class="status-icon">${statusIcons[record.status] || '❓'}</span>
                     </div>
                 </td>
             </tr>
@@ -823,7 +846,13 @@ class CIODNSChecker {
             const allRecords = [
                 ...result.matches.map(m => ({ ...m.expected, status: 'Pass', actual: m.actual })),
                 ...result.mismatches.map(m => ({ ...m.expected, status: 'Fail', actual: null })),
-                ...result.extras.map(e => ({ type: e.type, host: e.host, value: e.value, status: 'Extra', actual: e }))
+                ...result.extras.map(e => ({ 
+                    type: e.type, 
+                    host: e.host, 
+                    value: e.value, 
+                    status: e.status === 'info' ? 'Info' : 'Extra', 
+                    actual: e 
+                }))
             ];
 
             for (const record of allRecords) {

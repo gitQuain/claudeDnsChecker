@@ -209,77 +209,34 @@ class CIODNSChecker {
 
     async fetchRecordTypeForVerified(domain, type) {
         const allRecords = [];
-        
-        // For verified domains, use a comprehensive discovery approach
         const queries = [];
         
-        // Always query the root domain
+        // Always query the root domain first
         queries.push({ queryName: domain, host: '@' });
         
-        // Get all records for this domain to discover subdomains
-        const discoveredSubdomains = await this.discoverSubdomains(domain, type);
-        
-        // Add discovered subdomains to queries
-        discoveredSubdomains.forEach(subdomain => {
-            queries.push({ queryName: `${subdomain}.${domain}`, host: subdomain });
-        });
-        
-        // Add common Customer.io subdomains based on record type
-        if (type === 'TXT') {
-            const txtSubdomains = ['_dmarc', 'default._domainkey', 'selector1._domainkey', 'selector2._domainkey'];
-            txtSubdomains.forEach(sub => {
-                if (!discoveredSubdomains.includes(sub)) {
-                    queries.push({ queryName: `${sub}.${domain}`, host: sub });
-                }
-            });
-            
-            // For each discovered Customer.io subdomain, also check for DKIM selectors
-            discoveredSubdomains.forEach(subdomain => {
-                if (subdomain.includes('cioeu') || subdomain.includes('cius')) {
-                    queries.push({ 
-                        queryName: `mta._domainkey.${subdomain}.${domain}`, 
-                        host: `mta._domainkey.${subdomain}` 
-                    });
-                }
-            });
-        } else if (type === 'CNAME') {
+        // Add specific queries based on record type
+        if (type === 'CNAME') {
+            // Common CNAME subdomains
             const cnameSubdomains = ['email', 'l', 'www', 'mail'];
             cnameSubdomains.forEach(sub => {
-                if (!discoveredSubdomains.includes(sub)) {
-                    queries.push({ queryName: `${sub}.${domain}`, host: sub });
-                }
+                queries.push({ queryName: `${sub}.${domain}`, host: sub });
             });
-        }
-        
-        // For all record types, if we discovered any Customer.io subdomains, 
-        // make sure to query them for the current record type too
-        if ((type === 'MX' || type === 'TXT') && discoveredSubdomains.length === 0) {
-            // If we didn't discover any subdomains for MX/TXT, manually check common ones
-            const commonCustomerIoSubdomains = ['cioeu118541', 'cioeu118542', 'cius118541'];
-            for (const subdomain of commonCustomerIoSubdomains) {
-                // Test if this subdomain exists
-                try {
-                    const testResponse = await fetch(
-                        `https://dns.google/resolve?name=${subdomain}.${domain}&type=${type}`
-                    );
-                    const testData = await testResponse.json();
-                    
-                    if (testData.Answer && testData.Answer.length > 0) {
-                        queries.push({ queryName: `${subdomain}.${domain}`, host: subdomain });
-                        console.log(`Found ${type} records on fallback subdomain: ${subdomain}.${domain}`);
-                        
-                        // Also add DKIM selector if this is TXT and we found a Customer.io subdomain
-                        if (type === 'TXT') {
-                            queries.push({ 
-                                queryName: `mta._domainkey.${subdomain}.${domain}`, 
-                                host: `mta._domainkey.${subdomain}` 
-                            });
-                        }
-                    }
-                } catch (error) {
-                    // Silent fail
-                }
+        } else if (type === 'TXT') {
+            // Common TXT subdomains
+            queries.push({ queryName: `_dmarc.${domain}`, host: '_dmarc' });
+            
+            // Always check common Customer.io subdomains for TXT
+            const customerIoSubdomains = ['cioeu118541'];
+            for (const subdomain of customerIoSubdomains) {
+                queries.push({ queryName: `${subdomain}.${domain}`, host: subdomain });
+                queries.push({ 
+                    queryName: `mta._domainkey.${subdomain}.${domain}`, 
+                    host: `mta._domainkey.${subdomain}` 
+                });
             }
+        } else if (type === 'MX') {
+            // For MX records, always check Customer.io subdomain
+            queries.push({ queryName: `cioeu118541.${domain}`, host: 'cioeu118541' });
         }
         
         // Query each location
@@ -312,58 +269,6 @@ class CIODNSChecker {
         return allRecords;
     }
 
-    async discoverSubdomains(domain, targetType) {
-        const foundSubdomains = [];
-        
-        try {
-            console.log(`Attempting subdomain discovery for ${domain}`);
-            
-            // Try common Customer.io patterns based on the target type
-            const patterns = [];
-            
-            if (targetType === 'MX') {
-                // Customer.io MX records often have cioeu/cius prefixes
-                // Check more targeted range around common Customer.io IDs
-                for (let i = 118500; i <= 118600; i++) {
-                    patterns.push(`cioeu${i}`);
-                }
-                // Also check some broader ranges but less dense
-                for (let i = 100000; i <= 120000; i += 1000) {
-                    patterns.push(`cioeu${i}`);
-                    patterns.push(`cius${i}`);
-                }
-            } else {
-                // For non-MX records, still check common Customer.io patterns
-                patterns.push('cioeu118541', 'cius118541'); // Common patterns
-            }
-            
-            // Test each pattern to see if it has records
-            for (const pattern of patterns) {
-                try {
-                    const testResponse = await fetch(
-                        `https://dns.google/resolve?name=${pattern}.${domain}&type=${targetType}`
-                    );
-                    const testData = await testResponse.json();
-                    
-                    if (testData.Answer && testData.Answer.length > 0) {
-                        foundSubdomains.push(pattern);
-                        console.log(`Discovered subdomain: ${pattern}.${domain} (${testData.Answer.length} records)`);
-                    }
-                } catch (error) {
-                    // Silent fail for discovery
-                }
-                
-                // Small delay to avoid rate limiting
-                if (patterns.indexOf(pattern) % 10 === 0) {
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
-            }
-        } catch (error) {
-            console.error(`Error during subdomain discovery for ${domain}:`, error);
-        }
-        
-        return foundSubdomains;
-    }
 
     getRecordTypeNumber(type) {
         const types = {

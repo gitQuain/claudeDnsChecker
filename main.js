@@ -232,6 +232,16 @@ class CIODNSChecker {
                     queries.push({ queryName: `${sub}.${domain}`, host: sub });
                 }
             });
+            
+            // For each discovered Customer.io subdomain, also check for DKIM selectors
+            discoveredSubdomains.forEach(subdomain => {
+                if (subdomain.includes('cioeu') || subdomain.includes('cius')) {
+                    queries.push({ 
+                        queryName: `mta._domainkey.${subdomain}.${domain}`, 
+                        host: `mta._domainkey.${subdomain}` 
+                    });
+                }
+            });
         } else if (type === 'CNAME') {
             const cnameSubdomains = ['email', 'l', 'www', 'mail'];
             cnameSubdomains.forEach(sub => {
@@ -239,6 +249,37 @@ class CIODNSChecker {
                     queries.push({ queryName: `${sub}.${domain}`, host: sub });
                 }
             });
+        }
+        
+        // For all record types, if we discovered any Customer.io subdomains, 
+        // make sure to query them for the current record type too
+        if ((type === 'MX' || type === 'TXT') && discoveredSubdomains.length === 0) {
+            // If we didn't discover any subdomains for MX/TXT, manually check common ones
+            const commonCustomerIoSubdomains = ['cioeu118541', 'cioeu118542', 'cius118541'];
+            for (const subdomain of commonCustomerIoSubdomains) {
+                // Test if this subdomain exists
+                try {
+                    const testResponse = await fetch(
+                        `https://dns.google/resolve?name=${subdomain}.${domain}&type=${type}`
+                    );
+                    const testData = await testResponse.json();
+                    
+                    if (testData.Answer && testData.Answer.length > 0) {
+                        queries.push({ queryName: `${subdomain}.${domain}`, host: subdomain });
+                        console.log(`Found ${type} records on fallback subdomain: ${subdomain}.${domain}`);
+                        
+                        // Also add DKIM selector if this is TXT and we found a Customer.io subdomain
+                        if (type === 'TXT') {
+                            queries.push({ 
+                                queryName: `mta._domainkey.${subdomain}.${domain}`, 
+                                host: `mta._domainkey.${subdomain}` 
+                            });
+                        }
+                    }
+                } catch (error) {
+                    // Silent fail
+                }
+            }
         }
         
         // Query each location
@@ -275,7 +316,6 @@ class CIODNSChecker {
         const foundSubdomains = [];
         
         try {
-            // Query for ANY records to discover subdomains (not all DNS servers support this)
             console.log(`Attempting subdomain discovery for ${domain}`);
             
             // Try common Customer.io patterns based on the target type
@@ -283,10 +323,18 @@ class CIODNSChecker {
             
             if (targetType === 'MX') {
                 // Customer.io MX records often have cioeu/cius prefixes
-                for (let i = 118000; i <= 119000; i += 100) {
+                // Check more targeted range around common Customer.io IDs
+                for (let i = 118500; i <= 118600; i++) {
                     patterns.push(`cioeu${i}`);
-                    if (patterns.length > 20) break; // Limit to avoid too many queries
                 }
+                // Also check some broader ranges but less dense
+                for (let i = 100000; i <= 120000; i += 1000) {
+                    patterns.push(`cioeu${i}`);
+                    patterns.push(`cius${i}`);
+                }
+            } else {
+                // For non-MX records, still check common Customer.io patterns
+                patterns.push('cioeu118541', 'cius118541'); // Common patterns
             }
             
             // Test each pattern to see if it has records
@@ -299,14 +347,16 @@ class CIODNSChecker {
                     
                     if (testData.Answer && testData.Answer.length > 0) {
                         foundSubdomains.push(pattern);
-                        console.log(`Discovered subdomain: ${pattern}.${domain}`);
+                        console.log(`Discovered subdomain: ${pattern}.${domain} (${testData.Answer.length} records)`);
                     }
                 } catch (error) {
                     // Silent fail for discovery
                 }
                 
                 // Small delay to avoid rate limiting
-                await new Promise(resolve => setTimeout(resolve, 50));
+                if (patterns.indexOf(pattern) % 10 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
             }
         } catch (error) {
             console.error(`Error during subdomain discovery for ${domain}:`, error);

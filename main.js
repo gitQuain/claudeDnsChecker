@@ -210,21 +210,35 @@ class CIODNSChecker {
     async fetchRecordTypeForVerified(domain, type) {
         const allRecords = [];
         
-        // For verified domains, query root domain and common subdomains
+        // For verified domains, use a comprehensive discovery approach
         const queries = [];
         
         // Always query the root domain
         queries.push({ queryName: domain, host: '@' });
         
-        // Add common subdomains for TXT records
+        // Get all records for this domain to discover subdomains
+        const discoveredSubdomains = await this.discoverSubdomains(domain, type);
+        
+        // Add discovered subdomains to queries
+        discoveredSubdomains.forEach(subdomain => {
+            queries.push({ queryName: `${subdomain}.${domain}`, host: subdomain });
+        });
+        
+        // Add common Customer.io subdomains based on record type
         if (type === 'TXT') {
-            queries.push(
-                { queryName: `_dmarc.${domain}`, host: '_dmarc' },
-                // Add more common DKIM selectors if we find them
-                { queryName: `default._domainkey.${domain}`, host: 'default._domainkey' },
-                { queryName: `selector1._domainkey.${domain}`, host: 'selector1._domainkey' },
-                { queryName: `selector2._domainkey.${domain}`, host: 'selector2._domainkey' }
-            );
+            const txtSubdomains = ['_dmarc', 'default._domainkey', 'selector1._domainkey', 'selector2._domainkey'];
+            txtSubdomains.forEach(sub => {
+                if (!discoveredSubdomains.includes(sub)) {
+                    queries.push({ queryName: `${sub}.${domain}`, host: sub });
+                }
+            });
+        } else if (type === 'CNAME') {
+            const cnameSubdomains = ['email', 'l', 'www', 'mail'];
+            cnameSubdomains.forEach(sub => {
+                if (!discoveredSubdomains.includes(sub)) {
+                    queries.push({ queryName: `${sub}.${domain}`, host: sub });
+                }
+            });
         }
         
         // Query each location
@@ -255,6 +269,50 @@ class CIODNSChecker {
         }
         
         return allRecords;
+    }
+
+    async discoverSubdomains(domain, targetType) {
+        const foundSubdomains = [];
+        
+        try {
+            // Query for ANY records to discover subdomains (not all DNS servers support this)
+            console.log(`Attempting subdomain discovery for ${domain}`);
+            
+            // Try common Customer.io patterns based on the target type
+            const patterns = [];
+            
+            if (targetType === 'MX') {
+                // Customer.io MX records often have cioeu/cius prefixes
+                for (let i = 118000; i <= 119000; i += 100) {
+                    patterns.push(`cioeu${i}`);
+                    if (patterns.length > 20) break; // Limit to avoid too many queries
+                }
+            }
+            
+            // Test each pattern to see if it has records
+            for (const pattern of patterns) {
+                try {
+                    const testResponse = await fetch(
+                        `https://dns.google/resolve?name=${pattern}.${domain}&type=${targetType}`
+                    );
+                    const testData = await testResponse.json();
+                    
+                    if (testData.Answer && testData.Answer.length > 0) {
+                        foundSubdomains.push(pattern);
+                        console.log(`Discovered subdomain: ${pattern}.${domain}`);
+                    }
+                } catch (error) {
+                    // Silent fail for discovery
+                }
+                
+                // Small delay to avoid rate limiting
+                await new Promise(resolve => setTimeout(resolve, 50));
+            }
+        } catch (error) {
+            console.error(`Error during subdomain discovery for ${domain}:`, error);
+        }
+        
+        return foundSubdomains;
     }
 
     getRecordTypeNumber(type) {

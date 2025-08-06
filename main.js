@@ -131,13 +131,26 @@ class CIODNSChecker {
     }
 
     async fetchDNSRecords(domain, expectedRecords) {
-        const recordTypes = [...new Set(expectedRecords.map(r => r.type))];
+        // Get record types from expected records
+        const expectedTypes = [...new Set(expectedRecords.map(r => r.type))];
+        
+        // For domains with no expected records (verified domains), fetch common types
+        const commonTypes = ['MX', 'TXT', 'A', 'CNAME'];
+        const typesToFetch = expectedTypes.length > 0 ? expectedTypes : commonTypes;
+        
+        console.log(`Fetching record types for ${domain}:`, typesToFetch);
         const actual = {};
 
         // Fetch each record type
-        for (const type of recordTypes) {
+        for (const type of typesToFetch) {
             try {
-                actual[type] = await this.fetchRecordType(domain, type, expectedRecords);
+                if (expectedRecords.length > 0) {
+                    // For unverified domains, use expected records to guide queries
+                    actual[type] = await this.fetchRecordType(domain, type, expectedRecords);
+                } else {
+                    // For verified domains, fetch from root domain and common subdomains
+                    actual[type] = await this.fetchRecordTypeForVerified(domain, type);
+                }
             } catch (error) {
                 console.error(`Error fetching ${type} records for ${domain}:`, error);
                 actual[type] = [];
@@ -191,6 +204,56 @@ class CIODNSChecker {
             }
         }
 
+        return allRecords;
+    }
+
+    async fetchRecordTypeForVerified(domain, type) {
+        const allRecords = [];
+        
+        // For verified domains, query root domain and common subdomains
+        const queries = [];
+        
+        // Always query the root domain
+        queries.push({ queryName: domain, host: '@' });
+        
+        // Add common subdomains for TXT records
+        if (type === 'TXT') {
+            queries.push(
+                { queryName: `_dmarc.${domain}`, host: '_dmarc' },
+                // Add more common DKIM selectors if we find them
+                { queryName: `default._domainkey.${domain}`, host: 'default._domainkey' },
+                { queryName: `selector1._domainkey.${domain}`, host: 'selector1._domainkey' },
+                { queryName: `selector2._domainkey.${domain}`, host: 'selector2._domainkey' }
+            );
+        }
+        
+        // Query each location
+        for (const { queryName, host } of queries) {
+            try {
+                console.log(`Querying ${type} records for verified domain: ${queryName}`);
+                const response = await fetch(
+                    `https://dns.google/resolve?name=${queryName}&type=${type}`
+                );
+                const data = await response.json();
+                console.log(`DNS response for ${queryName} (${type}):`, data);
+                
+                if (data.Answer) {
+                    const records = data.Answer
+                        .filter(record => record.type === this.getRecordTypeNumber(type))
+                        .map(record => ({
+                            host: host,
+                            value: this.formatRecordValue(type, record.data),
+                            ttl: record.TTL
+                        }));
+                    
+                    allRecords.push(...records);
+                    console.log(`Found ${records.length} ${type} records for ${queryName}`);
+                }
+            } catch (error) {
+                console.error(`Error querying ${type} for ${queryName}:`, error);
+            }
+        }
+        
         return allRecords;
     }
 
@@ -478,28 +541,19 @@ class CIODNSChecker {
         ];
 
         if (allRecords.length === 0) {
-            // Check if this domain has no expected records (verified domain)
-            if (result.expected.length === 0) {
-                return `
-                    <div class="records-section">
-                        <div style="padding: 2rem; text-align: center; color: #38a169;">
-                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">✅</div>
-                            <div style="font-weight: 500;">Domain is verified and configured</div>
-                            <div style="font-size: 0.875rem; margin-top: 0.5rem; opacity: 0.8;">No DNS records need to be validated for this domain.</div>
+            return `
+                <div class="records-section">
+                    <div style="padding: 2rem; text-align: center; color: #718096;">
+                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📭</div>
+                        <div style="font-weight: 500;">No DNS records found</div>
+                        <div style="font-size: 0.875rem; margin-top: 0.5rem; opacity: 0.8;">
+                            ${result.expected.length === 0 ? 
+                                'This domain has no Customer.io DNS records configured.' : 
+                                'The expected DNS records are missing from this domain.'}
                         </div>
                     </div>
-                `;
-            } else {
-                return `
-                    <div class="records-section">
-                        <div style="padding: 2rem; text-align: center; color: #718096;">
-                            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔍</div>
-                            <div>Checking DNS records...</div>
-                            <div style="font-size: 0.875rem; margin-top: 0.5rem; opacity: 0.8;">DNS lookups may take a moment to complete.</div>
-                        </div>
-                    </div>
-                `;
-            }
+                </div>
+            `;
         }
 
         const recordRows = allRecords.map(record => this.createRecordRow(record)).join('');

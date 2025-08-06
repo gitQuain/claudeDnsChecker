@@ -149,27 +149,23 @@ class CIODNSChecker {
 
     async fetchRecordType(domain, type, expectedRecords) {
         const allRecords = [];
-        
-        // For Customer.io records, we need to query the base domain for most record types
-        // MX and TXT records are typically set on the base domain, not subdomains
-        let queryName = domain;
-        
-        // Special handling for specific record types that might use subdomains
         const expectedOfType = expectedRecords.filter(r => r.type === type);
         
-        // Check if any expected records have specific subdomain requirements
+        // For each expected record, query the appropriate DNS name
         for (const expectedRecord of expectedOfType) {
-            if (expectedRecord.host !== '@' && 
-                (expectedRecord.host.includes('_dmarc') || expectedRecord.host.includes('_domainkey'))) {
-                // For DMARC and DKIM records, query the specific subdomain
-                queryName = `${expectedRecord.host}.${domain}`;
-            } else {
-                // For MX, SPF (TXT), and most other records, query the base domain
+            let queryName;
+            
+            // Construct the query name based on the host
+            if (expectedRecord.host === '@') {
+                // Root domain
                 queryName = domain;
+            } else {
+                // Subdomain - the host IS the subdomain prefix
+                queryName = `${expectedRecord.host}.${domain}`;
             }
             
             try {
-                console.log(`Querying ${type} records for: ${queryName}`);
+                console.log(`Querying ${type} records for: ${queryName} (host: ${expectedRecord.host})`);
                 const response = await fetch(
                     `https://dns.google/resolve?name=${queryName}&type=${type}`
                 );
@@ -180,12 +176,15 @@ class CIODNSChecker {
                     const records = data.Answer
                         .filter(record => record.type === this.getRecordTypeNumber(type))
                         .map(record => ({
-                            host: expectedRecord.host, // Use the expected host, not the query name
+                            host: expectedRecord.host, // Use the expected host
                             value: this.formatRecordValue(type, record.data),
                             ttl: record.TTL
                         }));
                     
                     allRecords.push(...records);
+                    console.log(`Found ${records.length} ${type} records for ${queryName}`);
+                } else {
+                    console.log(`No ${type} records found for ${queryName}`);
                 }
             } catch (error) {
                 console.error(`Error querying ${type} for ${queryName}:`, error);

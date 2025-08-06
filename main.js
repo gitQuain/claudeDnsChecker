@@ -303,16 +303,43 @@ class CIODNSChecker {
         result.mismatches = [];
         result.extras = [];
 
-        // For verified domains with no expected records, treat all found records as informational
+        // For verified domains with no expected records, categorize found records
         if (expected.length === 0) {
-            // All found records are informational for verified domains
+            // Define what Customer.io typically expects
+            const customerIoExpectedPatterns = [
+                { type: 'MX', hostPattern: /^cioeu\d+$/ },
+                { type: 'TXT', hostPattern: /^cioeu\d+$/ }, // SPF record
+                { type: 'TXT', hostPattern: /^mta\._domainkey\.cioeu\d+$/ }, // DKIM
+                { type: 'TXT', hostPattern: /^_dmarc$/ }, // DMARC
+                { type: 'CNAME', hostPattern: /^(email|l)$/ } // Customer.io email subdomains
+            ];
+            
             for (const [type, records] of Object.entries(actual)) {
                 for (const actualRecord of records) {
-                    result.extras.push({
-                        type,
-                        ...actualRecord,
-                        status: 'info' // Use 'info' status for verified domain records
-                    });
+                    // Check if this record matches Customer.io patterns
+                    const isCustomerIoRecord = customerIoExpectedPatterns.some(pattern => 
+                        pattern.type === type && pattern.hostPattern.test(actualRecord.host)
+                    );
+                    
+                    if (isCustomerIoRecord) {
+                        // This is an expected Customer.io record
+                        result.matches.push({
+                            expected: {
+                                type: actualRecord.type,
+                                host: actualRecord.host,
+                                value: actualRecord.value
+                            },
+                            actual: actualRecord,
+                            status: 'pass'
+                        });
+                    } else {
+                        // This is an extra record (not required by Customer.io)
+                        result.extras.push({
+                            type,
+                            ...actualRecord,
+                            status: 'extra'
+                        });
+                    }
                 }
             }
             return;
@@ -616,13 +643,12 @@ class CIODNSChecker {
         const statusIcons = {
             'pass': '✅',
             'fail': '❌',
-            'extra': '➕',
-            'info': 'ℹ️'  // Information icon for verified domain records
+            'extra': '➕'
         };
 
         const actualValue = record.actual ? record.actual.value : '-';
-        // For verified domains (info status), show the actual value as both expected and actual
-        const expectedValue = record.status === 'info' ? actualValue : (record.value || '-');
+        // For extra records, don't show expected value
+        const expectedValue = record.status === 'extra' ? '-' : (record.value || '-');
 
         return `
             <tr>
@@ -755,7 +781,7 @@ class CIODNSChecker {
                     type: e.type, 
                     host: e.host, 
                     value: e.value, 
-                    status: e.status === 'info' ? 'Info' : 'Extra', 
+                    status: 'Extra', 
                     actual: e 
                 }))
             ];

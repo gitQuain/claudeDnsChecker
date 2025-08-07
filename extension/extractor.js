@@ -200,6 +200,7 @@
         // Method 2: If no domain found, use better heuristics based on the host pattern
         if (!associatedDomain) {
           console.log(`Inferring domain for host: "${hostValue}"`);
+          console.log(`Available domains: ${availableDomains.join(', ')}`);
           
           if (hostValue === 'email') {
             // 'email' host typically belongs to the root domain (dermful.com)
@@ -210,10 +211,15 @@
             console.log(`Associating 'email' host with root domain: ${hostValue} -> ${associatedDomain}`);
           } else if (hostValue === 'email.email') {
             // 'email.email' host typically belongs to the email subdomain (email.dermful.com)
-            const emailDomain = availableDomains.find(d => d.startsWith('email.')) || 
-                                availableDomains.find(d => d.includes('email')) ||
-                                availableDomains[1];
-            associatedDomain = emailDomain;
+            console.log(`Looking for email subdomain in: ${availableDomains.join(', ')}`);
+            const emailDomain = availableDomains.find(d => d.startsWith('email.'));
+            console.log(`Found email domain: ${emailDomain}`);
+            if (!emailDomain) {
+              console.log(`No email subdomain found, using fallback`);
+              associatedDomain = availableDomains.find(d => d.includes('email')) || availableDomains[1] || availableDomains[0];
+            } else {
+              associatedDomain = emailDomain;
+            }
             console.log(`Associating 'email.email' host with email subdomain: ${hostValue} -> ${associatedDomain}`);
           } else if (hostValue === 'l') {
             // 'l' host typically goes with primary domain
@@ -281,9 +287,14 @@
         const buttonText = btn.textContent.trim();
         console.log(`  Button text: "${buttonText}"`);
         
-        // Click buttons that expand/hide records
-        if (buttonText.includes('Show record') || buttonText === 'Show Records' || 
-            buttonText === 'Hide records' || buttonText.includes('Hide record')) {
+        // Normalize button text - remove extra whitespace and newlines for comparison
+        const normalizedText = buttonText.replace(/\s+/g, ' ').toLowerCase();
+        
+        // Click buttons that expand/hide records - handle various text formats
+        if (normalizedText.includes('show record') || 
+            normalizedText.includes('hide record') ||
+            normalizedText === 'show records' ||
+            normalizedText === 'hide records') {
           console.log(`  Clicking expand button in ${domainName}: "${buttonText}"`);
           btn.click();
           totalButtonsClicked++;

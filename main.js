@@ -310,22 +310,29 @@ class CIODNSChecker {
                 { type: 'MX', hostPattern: /^cioeu\d+$/ },
                 { type: 'TXT', hostPattern: /^cioeu\d+$/ }, // SPF record
                 { type: 'TXT', hostPattern: /^mta\._domainkey\.cioeu\d+$/ }, // DKIM
-                { type: 'TXT', hostPattern: /^_dmarc$/ }, // DMARC
-                { type: 'CNAME', hostPattern: /^(email|l)$/ } // Customer.io email subdomains
+                { type: 'TXT', hostPattern: /^_dmarc$/ } // DMARC
             ];
             
             for (const [type, records] of Object.entries(actual)) {
                 for (const actualRecord of records) {
                     // Check if this record matches Customer.io patterns
-                    const isCustomerIoRecord = customerIoExpectedPatterns.some(pattern => 
+                    let isCustomerIoRecord = customerIoExpectedPatterns.some(pattern => 
                         pattern.type === type && pattern.hostPattern.test(actualRecord.host)
                     );
+                    
+                    // Special case for CNAME records - check if they point to Customer.io tracking domains
+                    if (type === 'CNAME' && !isCustomerIoRecord) {
+                        const customerIoTrackingDomains = /^e(-eu)?\.customeriomail\.com$/;
+                        if (customerIoTrackingDomains.test(actualRecord.value)) {
+                            isCustomerIoRecord = true;
+                        }
+                    }
                     
                     if (isCustomerIoRecord) {
                         // This is an expected Customer.io record
                         result.matches.push({
                             expected: {
-                                type: actualRecord.type,
+                                type: type,
                                 host: actualRecord.host,
                                 value: actualRecord.value
                             },

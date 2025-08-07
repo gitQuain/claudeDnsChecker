@@ -27,6 +27,7 @@
       const expected = [];
       
       // Look for DNS record inputs (works for both verified and unverified when expanded)
+      // Make sure we're NOT in the link tracking section
       const recordInputs = panelBody.querySelectorAll('input[aria-label*="Record"]');
       if (recordInputs.length > 0) {
         console.log(`Found ${recordInputs.length} record inputs - extracting DNS records`);
@@ -37,6 +38,26 @@
         for (let i = 0; i < allInputs.length; i++) {
           const input = allInputs[i];
           const ariaLabel = input.getAttribute('aria-label') || '';
+          
+          // Skip if this appears to be in the link tracking section
+          // Check if this input is inside a link tracking related container
+          let isLinkTrackingInput = false;
+          let parent = input.parentElement;
+          for (let j = 0; j < 10 && parent; j++) {
+            const parentText = parent.textContent || '';
+            if (parentText.includes('Link Tracking') || 
+                parent.classList.contains('copy-to-clipboard')) {
+              isLinkTrackingInput = true;
+              break;
+            }
+            parent = parent.parentElement;
+          }
+          
+          // Skip link tracking inputs - they'll be handled separately
+          if (isLinkTrackingInput) {
+            console.log(`Skipping link tracking input: ${ariaLabel}`);
+            continue;
+          }
           
           // Look for record type inputs
           if (ariaLabel === 'Record type') {
@@ -52,6 +73,14 @@
               let recordType = typeInput.value.trim().toUpperCase();
               let host = hostInput.value.trim().replace(/\.$/, '');
               let value = valueInput.value.trim().replace(/\.$/, '');
+              
+              // Skip if this looks like a Customer.io link tracking CNAME
+              if (recordType === 'CNAME' && 
+                  (value === 'e.customeriomail.com' || value === 'e-eu.customeriomail.com')) {
+                console.log(`Skipping Customer.io link tracking CNAME: ${host} -> ${value}`);
+                i += 2; // Skip the host and value inputs
+                continue;
+              }
               
               // For MX records, include priority in the value
               if (recordType === 'MX' && priorityInput && 

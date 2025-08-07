@@ -197,23 +197,28 @@
           current = current.parentElement;
         }
         
-        // Method 2: If no domain found, try to infer based on host pattern
+        // Method 2: If no domain found, use better heuristics based on the host pattern
         if (!associatedDomain) {
-          // Simple heuristic: 'l' often goes with the first/primary domain
-          // 'email' often goes with test/secondary domains
-          if (hostValue === 'l' && availableDomains.length > 0) {
-            // Find the domain that looks most like a primary domain (shorter, no 'test' etc)
-            const primaryDomain = availableDomains.find(d => !d.includes('test')) || availableDomains[0];
+          console.log(`Inferring domain for host: "${hostValue}"`);
+          
+          if (hostValue === 'email') {
+            // 'email' host typically belongs to the root domain (dermful.com)
+            const rootDomain = availableDomains.find(d => !d.includes('.') || d.split('.').length === 2) || availableDomains[0];
+            associatedDomain = rootDomain;
+            console.log(`Associating 'email' host with root domain: ${hostValue} -> ${associatedDomain}`);
+          } else if (hostValue === 'email.email') {
+            // 'email.email' host typically belongs to the email subdomain (email.dermful.com)
+            const emailDomain = availableDomains.find(d => d.startsWith('email.')) || availableDomains.find(d => d.includes('email'));
+            associatedDomain = emailDomain || availableDomains[1];
+            console.log(`Associating 'email.email' host with email domain: ${hostValue} -> ${associatedDomain}`);
+          } else if (hostValue === 'l') {
+            // 'l' host typically goes with primary domain
+            const primaryDomain = availableDomains.find(d => !d.includes('email') && !d.includes('test')) || availableDomains[0];
             associatedDomain = primaryDomain;
             console.log(`Associating 'l' host with primary domain: ${hostValue} -> ${associatedDomain}`);
-          } else if (hostValue === 'email' && availableDomains.length > 1) {
-            // Find a domain that looks like a test domain, or use the second one
-            const testDomain = availableDomains.find(d => d.includes('test')) || availableDomains[1] || availableDomains[0];
-            associatedDomain = testDomain;
-            console.log(`Associating 'email' host with test domain: ${hostValue} -> ${associatedDomain}`);
-          } else if (availableDomains.length > index) {
+          } else {
             // Fallback to index matching
-            associatedDomain = availableDomains[index];
+            associatedDomain = availableDomains[index] || availableDomains[0];
             console.log(`Associating by index fallback: ${hostValue} -> ${associatedDomain}`);
           }
         }
@@ -254,16 +259,20 @@
     // Step 2: Try expanding panels to get more data
     console.log('--- Trying to expand any collapsed panels ---');
     
-    const expandButtons = Array.from(document.querySelectorAll('button')).filter(btn => 
-      btn.textContent.trim().includes('Show record') || btn.textContent.trim() === 'Show Records'
-    );
+    // Find and click ALL "Hide records" and "Show Records" buttons to expand all panels
+    const allButtons = Array.from(document.querySelectorAll('button'));
+    const expandButtons = allButtons.filter(btn => {
+      const text = btn.textContent.trim();
+      return text.includes('Show record') || text === 'Show Records' || text === 'Hide records' || text.includes('Hide record');
+    });
     
-    console.log(`Found ${expandButtons.length} expand buttons to click`);
+    console.log(`Found ${expandButtons.length} expand/hide buttons to click`);
     
     for (const button of expandButtons) {
-      console.log('Clicking button:', button.textContent.trim());
+      const buttonText = button.textContent.trim();
+      console.log('Clicking button:', buttonText);
       button.click();
-      await sleep(200);
+      await sleep(300); // Slightly longer delay to ensure DOM updates
     }
     
     // Wait for DOM to update after clicking

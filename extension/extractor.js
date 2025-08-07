@@ -307,8 +307,35 @@
     // Wait longer for all panels to expand
     await sleep(1500);
     
-    // Wait for DOM to update after clicking
-    await sleep(1000);
+    // Second pass: Click individual record expand buttons (for dermful.com style domains)
+    console.log('--- Second pass: Expanding individual record sections ---');
+    let secondPassButtons = 0;
+    
+    allPanels.forEach((panel, index) => {
+      const titleElement = panel.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
+      const domainName = titleElement ? titleElement.textContent.trim() : `Panel ${index}`;
+      
+      // Look for individual record expand buttons with icons (chevron-down)
+      const recordButtons = panel.querySelectorAll('button');
+      
+      recordButtons.forEach(btn => {
+        const buttonText = btn.textContent.trim();
+        const normalizedText = buttonText.replace(/\s+/g, ' ').toLowerCase();
+        const hasChevronIcon = btn.querySelector('svg[aria-hidden="true"]') || btn.innerHTML.includes('chevron-down');
+        
+        // Click buttons that say "Show record" or "Show records" and have chevron icons
+        if ((normalizedText.includes('show record') || normalizedText.includes('show records')) && hasChevronIcon) {
+          console.log(`  Clicking individual record button in ${domainName}: "${buttonText}"`);
+          btn.click();
+          secondPassButtons++;
+        }
+      });
+    });
+    
+    console.log(`Second pass: ${secondPassButtons} individual record buttons clicked`);
+    
+    // Wait for DOM to update after second pass
+    await sleep(2000);
     
     // Try extraction after expanding
     console.log('--- Extracting after expansion ---');

@@ -14,12 +14,23 @@
     
     allPanels.forEach((panel, index) => {
       const titleElement = panel.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
-      const domainName = titleElement ? titleElement.textContent.trim() : null;
+      let domainName = titleElement ? titleElement.textContent.trim() : null;
       const panelBody = panel.querySelector('.fly-panel-body');
       
       // Skip non-domain panels (like "Dynamic From Addresses")
       if (!domainName || !panelBody || !domainName.includes('.')) {
         return;
+      }
+      
+      // Clean up domain name - remove any subdomain prefixes like "email."
+      // Domain should be just the root domain (e.g., dermful.com not email.dermful.com)
+      if (domainName.startsWith('email.') || domainName.startsWith('l.') || domainName.startsWith('www.')) {
+        const parts = domainName.split('.');
+        if (parts.length >= 3) {
+          // Remove the first part (subdomain) and keep the rest
+          domainName = parts.slice(1).join('.');
+          console.log(`Cleaned domain name: "${titleElement.textContent.trim()}" -> "${domainName}"`);
+        }
       }
       
       console.log(`Processing panel ${index}: "${domainName}"`);
@@ -81,6 +92,12 @@
                 const priority = priorityInput.value.trim();
                 value = `${priority} ${value}`;
                 i++; // Skip the priority input in next iteration
+              }
+              
+              // Clean up host name - remove domain suffix if present
+              if (host.endsWith('.' + domainName)) {
+                host = host.replace('.' + domainName, '');
+                console.log(`Cleaned host name: removed domain suffix, now: "${host}"`);
               }
               
               // Convert empty host to "@"
@@ -152,8 +169,15 @@
     
     domainPanels.forEach(panel => {
       const titleElement = panel.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
-      const domainName = titleElement ? titleElement.textContent.trim() : null;
+      let domainName = titleElement ? titleElement.textContent.trim() : null;
       if (domainName && domainName.includes('.')) {
+        // Clean up domain name - same logic as above
+        if (domainName.startsWith('email.') || domainName.startsWith('l.') || domainName.startsWith('www.')) {
+          const parts = domainName.split('.');
+          if (parts.length >= 3) {
+            domainName = parts.slice(1).join('.');
+          }
+        }
         availableDomains.push(domainName);
       }
     });

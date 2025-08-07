@@ -142,18 +142,24 @@
       const titleElement = panel.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
       const domainName = titleElement ? titleElement.textContent.trim() : `Panel ${index}`;
       
-      // Look for individual record expand buttons (these have chevron icons)
+      // Look for individual record expand buttons
       const recordButtons = panel.querySelectorAll('button');
+      console.log(`  Panel "${domainName}": Found ${recordButtons.length} buttons in second pass`);
       
       recordButtons.forEach(btn => {
         const buttonText = btn.textContent.trim();
         const normalizedText = buttonText.replace(/\s+/g, ' ').toLowerCase();
         
-        // Look for buttons with "Show record" or "Show records" that have chevron/dropdown icons
-        const hasIcon = btn.querySelector('svg') || btn.innerHTML.includes('chevron') || btn.innerHTML.includes('icon');
+        // Debug: Log all button text to see what's available
+        if (normalizedText.includes('show') || normalizedText.includes('record')) {
+          console.log(`    Button: "${buttonText}" | Normalized: "${normalizedText}"`);
+        }
         
-        if ((normalizedText.includes('show record') || normalizedText.includes('show records')) && hasIcon) {
-          console.log(`  Clicking individual record button in ${domainName}: "${buttonText}"`);
+        // Look for buttons with "Show record" or "Show records" 
+        // Remove strict icon requirement - some buttons might not have detectable icons
+        if (normalizedText.includes('show record') || 
+            (normalizedText.includes('show') && normalizedText.includes('records'))) {
+          console.log(`    Clicking individual record button in ${domainName}: "${buttonText}"`);
           btn.click();
           secondPassButtons++;
         }

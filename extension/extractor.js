@@ -131,8 +131,9 @@
     
     console.log(`Total buttons clicked: ${totalButtonsClicked}`);
     
-    // Wait for first-level expansions to complete
-    await sleep(2000);
+    // Wait longer for first-level expansions to complete and DOM to update
+    console.log('--- Waiting 5 seconds for DOM updates ---');
+    await sleep(5000);
     
     // Step 2.5: Second pass for verified domains - click individual record expand buttons
     console.log('--- Second pass: Expanding individual record sections ---');
@@ -150,15 +151,14 @@
         const buttonText = btn.textContent.trim();
         const normalizedText = buttonText.replace(/\s+/g, ' ').toLowerCase();
         
-        // Debug: Log all button text to see what's available
-        if (normalizedText.includes('show') || normalizedText.includes('record')) {
-          console.log(`    Button: "${buttonText}" | Normalized: "${normalizedText}"`);
-        }
+        // Debug: Log ALL buttons to see what's actually available
+        console.log(`    Button: "${buttonText}" | Normalized: "${normalizedText}"`);
         
         // Look for buttons with "Show record" or "Show records" 
-        // Remove strict icon requirement - some buttons might not have detectable icons
-        if (normalizedText.includes('show record') || 
-            (normalizedText.includes('show') && normalizedText.includes('records'))) {
+        // But exclude the main "Show Records" button we already clicked
+        if ((normalizedText.includes('show record') || 
+            (normalizedText.includes('show') && normalizedText.includes('records'))) &&
+            normalizedText !== 'show records') { // Don't re-click the main button
           console.log(`    Clicking individual record button in ${domainName}: "${buttonText}"`);
           btn.click();
           secondPassButtons++;

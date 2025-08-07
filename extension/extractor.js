@@ -166,10 +166,25 @@
           current = current.parentElement;
         }
         
-        // Method 2: If no domain found, try to match by index or pattern
-        if (!associatedDomain && availableDomains.length > index) {
-          associatedDomain = availableDomains[index];
-          console.log(`Associating by index: ${hostValue} -> ${associatedDomain}`);
+        // Method 2: If no domain found, try to infer based on host pattern
+        if (!associatedDomain) {
+          // Simple heuristic: 'l' often goes with the first/primary domain
+          // 'email' often goes with test/secondary domains
+          if (hostValue === 'l' && availableDomains.length > 0) {
+            // Find the domain that looks most like a primary domain (shorter, no 'test' etc)
+            const primaryDomain = availableDomains.find(d => !d.includes('test')) || availableDomains[0];
+            associatedDomain = primaryDomain;
+            console.log(`Associating 'l' host with primary domain: ${hostValue} -> ${associatedDomain}`);
+          } else if (hostValue === 'email' && availableDomains.length > 1) {
+            // Find a domain that looks like a test domain, or use the second one
+            const testDomain = availableDomains.find(d => d.includes('test')) || availableDomains[1] || availableDomains[0];
+            associatedDomain = testDomain;
+            console.log(`Associating 'email' host with test domain: ${hostValue} -> ${associatedDomain}`);
+          } else if (availableDomains.length > index) {
+            // Fallback to index matching
+            associatedDomain = availableDomains[index];
+            console.log(`Associating by index fallback: ${hostValue} -> ${associatedDomain}`);
+          }
         }
         
         if (associatedDomain) {

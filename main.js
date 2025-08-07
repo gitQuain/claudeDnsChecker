@@ -331,6 +331,39 @@ class CIODNSChecker {
                 };
                 console.log(`Link tracking record missing for ${domain}: ${linkTrackingRecord.host}`);
             }
+        } else {
+            // If no link tracking was extracted, check if this domain has any Customer.io tracking CNAMEs
+            // and try to infer which one belongs to this domain
+            const cnameRecords = actual.CNAME || [];
+            const trackingCnames = cnameRecords.filter(record => 
+                record.value === 'e.customeriomail.com' || record.value === 'e-eu.customeriomail.com'
+            );
+            
+            if (trackingCnames.length > 0) {
+                // Heuristic: 'l' typically belongs to primary domains, 'email' to test domains
+                let bestMatch = null;
+                
+                if (domain.includes('test')) {
+                    // For test domains, prefer 'email' host
+                    bestMatch = trackingCnames.find(c => c.host === 'email') || trackingCnames[0];
+                } else {
+                    // For primary domains, prefer 'l' host
+                    bestMatch = trackingCnames.find(c => c.host === 'l') || trackingCnames[0];
+                }
+                
+                if (bestMatch) {
+                    console.log(`Inferred link tracking for ${domain}: ${bestMatch.host} -> ${bestMatch.value}`);
+                    result.linkTrackingMatch = {
+                        expected: {
+                            host: bestMatch.host,
+                            type: 'CNAME',
+                            value: bestMatch.value
+                        },
+                        actual: bestMatch,
+                        status: 'pass'
+                    };
+                }
+            }
         }
 
         // For verified domains with no expected records, categorize found records

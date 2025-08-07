@@ -95,9 +95,20 @@
               }
               
               // Clean up host name - remove domain suffix if present
-              if (host.endsWith('.' + domainName)) {
+              // Only clean if the host actually contains the full domain as a suffix
+              const fullHostWithDomain = host + '.' + domainName;
+              if (host.includes('.') && host.endsWith('.' + domainName)) {
                 host = host.replace('.' + domainName, '');
                 console.log(`Cleaned host name: removed domain suffix, now: "${host}"`);
+              } else if (host.includes('.') && host.split('.').length > 2) {
+                // If host has multiple dots but doesn't end with domain, 
+                // it might be malformed - try to extract just the first part
+                const parts = host.split('.');
+                if (parts[parts.length - 1] === parts[parts.length - 2]) {
+                  // Cases like "email.email" - take just the first part
+                  host = parts[0];
+                  console.log(`Fixed malformed host name: "${hostValue.trim()}" -> "${host}"`);
+                }
               }
               
               // Convert empty host to "@"
@@ -321,6 +332,14 @@
         finalResults.push(domainResult);
       }
     }
+    
+    console.log('=== DOMAIN EXTRACTION DEBUG ===');
+    console.log(`Initial results: ${initialResults.length} domains`);
+    initialResults.forEach(r => console.log(`  - Initial: ${r.domain} (${r.expected.length} records)`));
+    console.log(`Expanded results: ${expandedResults.length} domains`);
+    expandedResults.forEach(r => console.log(`  - Expanded: ${r.domain} (${r.expected.length} records)`));
+    console.log(`Link tracking results: ${linkTrackingResults.length} domains`);
+    linkTrackingResults.forEach(r => console.log(`  - Link tracking: ${r.domain}`));
     
     console.log('=== FINAL PAYLOAD ===');
     console.log(JSON.stringify(finalResults, null, 2));

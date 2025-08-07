@@ -121,35 +121,70 @@
       await sleep(1000);
     }
     
-    // Look for link tracking records
-    const copyToClipboardContainers = document.querySelectorAll('.copy-to-clipboard');
+    // Look for link tracking records - try a different approach
+    // The link tracking records might be in a different structure than domain panels
     
-    copyToClipboardContainers.forEach((container, index) => {
-      const hostInput = container.querySelector('input[aria-label="Record host name"]');
+    // First, try to find all domain names from the main sending domains page
+    const domainPanels = document.querySelectorAll('.fly-panel');
+    const availableDomains = [];
+    
+    domainPanels.forEach(panel => {
+      const titleElement = panel.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
+      const domainName = titleElement ? titleElement.textContent.trim() : null;
+      if (domainName && domainName.includes('.')) {
+        availableDomains.push(domainName);
+      }
+    });
+    
+    console.log(`Available domains: ${availableDomains.join(', ')}`);
+    
+    // Now look for link tracking inputs
+    const linkTrackingInputs = document.querySelectorAll('input[aria-label="Record host name"]');
+    
+    console.log(`Found ${linkTrackingInputs.length} link tracking inputs`);
+    
+    linkTrackingInputs.forEach((input, index) => {
+      const hostValue = input.value.trim();
+      console.log(`Link tracking input ${index}: host="${hostValue}"`);
       
-      if (hostInput) {
-        const hostValue = hostInput.value.trim();
-        console.log(`Found link tracking host: ${hostValue}`);
+      if (hostValue) {
+        // Try to determine which domain this belongs to
+        // Method 1: Look for nearby domain indicators
+        let associatedDomain = null;
         
-        // Try to find the associated domain by looking at nearby elements or context
-        // This might need adjustment based on the actual DOM structure
-        const panelElement = container.closest('.fly-panel');
-        if (panelElement) {
-          const titleElement = panelElement.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
-          const domainName = titleElement ? titleElement.textContent.trim() : null;
-          
-          if (domainName && domainName.includes('.')) {
-            linkTrackingData.push({
-              domain: domainName,
-              linkTracking: {
-                type: 'CNAME',
-                host: hostValue,
-                value: 'e-eu.customeriomail.com' // Default, might need to extract actual value
-              }
-            });
-            
-            console.log(`Link tracking for ${domainName}: CNAME ${hostValue} -> e-eu.customeriomail.com`);
+        // Look up the DOM tree for domain context
+        let current = input.parentElement;
+        for (let i = 0; i < 10 && current; i++) {
+          const text = current.textContent;
+          for (const domain of availableDomains) {
+            if (text.includes(domain)) {
+              associatedDomain = domain;
+              break;
+            }
           }
+          if (associatedDomain) break;
+          current = current.parentElement;
+        }
+        
+        // Method 2: If no domain found, try to match by index or pattern
+        if (!associatedDomain && availableDomains.length > index) {
+          associatedDomain = availableDomains[index];
+          console.log(`Associating by index: ${hostValue} -> ${associatedDomain}`);
+        }
+        
+        if (associatedDomain) {
+          linkTrackingData.push({
+            domain: associatedDomain,
+            linkTracking: {
+              type: 'CNAME',
+              host: hostValue,
+              value: 'e-eu.customeriomail.com'
+            }
+          });
+          
+          console.log(`Link tracking: ${associatedDomain} -> CNAME ${hostValue} e-eu.customeriomail.com`);
+        } else {
+          console.log(`Could not associate host "${hostValue}" with any domain`);
         }
       }
     });

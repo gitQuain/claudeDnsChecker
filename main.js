@@ -345,10 +345,23 @@ class CIODNSChecker {
             
             for (const [type, records] of Object.entries(actual)) {
                 for (const actualRecord of records) {
-                    // Skip if this CNAME is already handled as link tracking
+                    // Skip if this CNAME is already handled as link tracking for THIS domain
                     if (type === 'CNAME' && result.linkTracking && 
                         actualRecord.host === result.linkTracking.host) {
                         continue;
+                    }
+                    
+                    // Skip Customer.io tracking CNAMEs that belong to other domains
+                    if (type === 'CNAME') {
+                        const customerIoTrackingDomains = /^e(-eu)?\.customeriomail\.com$/;
+                        if (customerIoTrackingDomains.test(actualRecord.value)) {
+                            // This is a Customer.io tracking CNAME, but check if it belongs to this domain
+                            // If it's not this domain's link tracking record, skip it
+                            if (!result.linkTracking || actualRecord.host !== result.linkTracking.host) {
+                                console.log(`Skipping Customer.io tracking CNAME ${actualRecord.host} -> ${actualRecord.value} (belongs to different domain)`);
+                                continue;
+                            }
+                        }
                     }
                     
                     // Check if this record matches Customer.io patterns
@@ -356,14 +369,7 @@ class CIODNSChecker {
                         pattern.type === type && pattern.hostPattern.test(actualRecord.host)
                     );
                     
-                    // Special case for CNAME records - check if they point to Customer.io tracking domains
-                    // but exclude ones that are already handled as link tracking
-                    if (type === 'CNAME' && !isCustomerIoRecord) {
-                        const customerIoTrackingDomains = /^e(-eu)?\.customeriomail\.com$/;
-                        if (customerIoTrackingDomains.test(actualRecord.value)) {
-                            isCustomerIoRecord = true;
-                        }
-                    }
+                    // Note: We don't need the special CNAME case anymore since we handle it above
                     
                     if (isCustomerIoRecord) {
                         // This is an expected Customer.io record

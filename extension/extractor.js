@@ -131,8 +131,39 @@
     
     console.log(`Total buttons clicked: ${totalButtonsClicked}`);
     
-    // Wait for expansions to complete
-    await sleep(3000);
+    // Wait for first-level expansions to complete
+    await sleep(2000);
+    
+    // Step 2.5: Second pass for verified domains - click individual record expand buttons
+    console.log('--- Second pass: Expanding individual record sections ---');
+    let secondPassButtons = 0;
+    
+    allPanels.forEach((panel, index) => {
+      const titleElement = panel.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
+      const domainName = titleElement ? titleElement.textContent.trim() : `Panel ${index}`;
+      
+      // Look for individual record expand buttons (these have chevron icons)
+      const recordButtons = panel.querySelectorAll('button');
+      
+      recordButtons.forEach(btn => {
+        const buttonText = btn.textContent.trim();
+        const normalizedText = buttonText.replace(/\s+/g, ' ').toLowerCase();
+        
+        // Look for buttons with "Show record" or "Show records" that have chevron/dropdown icons
+        const hasIcon = btn.querySelector('svg') || btn.innerHTML.includes('chevron') || btn.innerHTML.includes('icon');
+        
+        if ((normalizedText.includes('show record') || normalizedText.includes('show records')) && hasIcon) {
+          console.log(`  Clicking individual record button in ${domainName}: "${buttonText}"`);
+          btn.click();
+          secondPassButtons++;
+        }
+      });
+    });
+    
+    console.log(`Second pass: ${secondPassButtons} individual record buttons clicked`);
+    
+    // Wait for second-level expansions to complete  
+    await sleep(2000);
     
     // Step 3: Extract after all expansions
     console.log('--- Extracting after expansion ---');

@@ -22,10 +22,7 @@
         return;
       }
       
-      // IMPORTANT: Don't clean domain names in Customer.io workspaces
-      // Each domain panel represents a separate domain that Customer.io manages
-      // Both "dermful.com" and "email.dermful.com" are separate domains with their own DNS records
-      // The original assumption that subdomains should be cleaned was incorrect
+      // Keep domain names exactly as they appear - no cleaning
       console.log(`Found domain: "${domainName}"`);
       
       console.log(`Processing panel ${index}: "${domainName}"`);
@@ -89,39 +86,10 @@
                 i++; // Skip the priority input in next iteration
               }
               
-              // Clean up host name based on the domain context
-              const originalHost = host;
-              
-              // For domains like "email.dermful.com", hosts might be "cio129327.email" 
-              // which should be cleaned to just "cio129327"
-              if (domainName.includes('.') && host.includes('.')) {
-                const domainParts = domainName.split('.');
-                const hostParts = host.split('.');
-                
-                // If the host ends with a part of the domain name, clean it
-                // e.g., "cio129327.email" for domain "email.dermful.com" -> "cio129327"
-                if (hostParts.length > 1 && domainParts.length > 0) {
-                  const hostSuffix = hostParts[hostParts.length - 1];
-                  const domainPrefix = domainParts[0];
-                  
-                  if (hostSuffix === domainPrefix) {
-                    host = hostParts.slice(0, -1).join('.');
-                    console.log(`Cleaned host name: "${originalHost}" -> "${host}" (removed domain prefix)`);
-                  }
-                }
-                
-                // Handle cases like "email.email" -> "email"
-                if (hostParts.length === 2 && hostParts[0] === hostParts[1]) {
-                  host = hostParts[0];
-                  console.log(`Fixed duplicate host name: "${originalHost}" -> "${host}"`);
-                }
-              }
-              
-              // For standard cases, remove full domain suffix if present
-              if (host.includes('.') && host.endsWith('.' + domainName)) {
-                host = host.replace('.' + domainName, '');
-                console.log(`Cleaned host name: removed domain suffix, now: "${host}"`);
-              }
+              // Keep host names exactly as extracted - no cleaning
+              // For email.dermful.com: "cio129327.email" should stay "cio129327.email"
+              // For dermful.com: "cio129327" should stay "cio129327"
+              console.log(`Host name: "${host}" (kept as-is)`);
               
               // Convert empty host to "@"
               if (host === '' || host === domainName) {

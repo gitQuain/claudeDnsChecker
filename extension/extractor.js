@@ -203,14 +203,18 @@
           
           if (hostValue === 'email') {
             // 'email' host typically belongs to the root domain (dermful.com)
-            const rootDomain = availableDomains.find(d => !d.includes('.') || d.split('.').length === 2) || availableDomains[0];
+            const rootDomain = availableDomains.find(d => d.split('.').length === 2 && !d.startsWith('email.')) || 
+                               availableDomains.find(d => !d.includes('email')) || 
+                               availableDomains[0];
             associatedDomain = rootDomain;
             console.log(`Associating 'email' host with root domain: ${hostValue} -> ${associatedDomain}`);
           } else if (hostValue === 'email.email') {
             // 'email.email' host typically belongs to the email subdomain (email.dermful.com)
-            const emailDomain = availableDomains.find(d => d.startsWith('email.')) || availableDomains.find(d => d.includes('email'));
-            associatedDomain = emailDomain || availableDomains[1];
-            console.log(`Associating 'email.email' host with email domain: ${hostValue} -> ${associatedDomain}`);
+            const emailDomain = availableDomains.find(d => d.startsWith('email.')) || 
+                                availableDomains.find(d => d.includes('email')) ||
+                                availableDomains[1];
+            associatedDomain = emailDomain;
+            console.log(`Associating 'email.email' host with email subdomain: ${hostValue} -> ${associatedDomain}`);
           } else if (hostValue === 'l') {
             // 'l' host typically goes with primary domain
             const primaryDomain = availableDomains.find(d => !d.includes('email') && !d.includes('test')) || availableDomains[0];
@@ -259,21 +263,38 @@
     // Step 2: Try expanding panels to get more data
     console.log('--- Trying to expand any collapsed panels ---');
     
-    // Find and click ALL "Hide records" and "Show Records" buttons to expand all panels
-    const allButtons = Array.from(document.querySelectorAll('button'));
-    const expandButtons = allButtons.filter(btn => {
-      const text = btn.textContent.trim();
-      return text.includes('Show record') || text === 'Show Records' || text === 'Hide records' || text.includes('Hide record');
+    // Find expand buttons within each domain panel specifically
+    const allPanels = document.querySelectorAll('.fly-panel');
+    let totalButtonsClicked = 0;
+    
+    console.log(`Looking for expand buttons in ${allPanels.length} panels`);
+    
+    allPanels.forEach((panel, index) => {
+      const titleElement = panel.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
+      const domainName = titleElement ? titleElement.textContent.trim() : `Panel ${index}`;
+      
+      // Look for buttons within this specific panel
+      const panelButtons = panel.querySelectorAll('button');
+      console.log(`Panel "${domainName}": Found ${panelButtons.length} buttons`);
+      
+      panelButtons.forEach(btn => {
+        const buttonText = btn.textContent.trim();
+        console.log(`  Button text: "${buttonText}"`);
+        
+        // Click buttons that expand/hide records
+        if (buttonText.includes('Show record') || buttonText === 'Show Records' || 
+            buttonText === 'Hide records' || buttonText.includes('Hide record')) {
+          console.log(`  Clicking expand button in ${domainName}: "${buttonText}"`);
+          btn.click();
+          totalButtonsClicked++;
+        }
+      });
     });
     
-    console.log(`Found ${expandButtons.length} expand/hide buttons to click`);
+    console.log(`Total expand buttons clicked: ${totalButtonsClicked}`);
     
-    for (const button of expandButtons) {
-      const buttonText = button.textContent.trim();
-      console.log('Clicking button:', buttonText);
-      button.click();
-      await sleep(300); // Slightly longer delay to ensure DOM updates
-    }
+    // Wait longer for all panels to expand
+    await sleep(1500);
     
     // Wait for DOM to update after clicking
     await sleep(1000);

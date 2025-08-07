@@ -120,11 +120,21 @@
         const buttonText = btn.textContent.trim();
         const normalizedText = buttonText.replace(/\s+/g, ' ').toLowerCase();
         
+        // Debug: Log all buttons in this panel
+        console.log(`    "${domainName}" button: "${buttonText}"`);
+        
         // Click any button that mentions "show" and "record"
         if (normalizedText.includes('show') && normalizedText.includes('record')) {
-          console.log(`  Clicking: "${buttonText}"`);
+          console.log(`  Clicking: "${buttonText}" in ${domainName}`);
+          console.log(`  Button HTML:`, btn.outerHTML.substring(0, 200) + '...');
           btn.click();
           totalButtonsClicked++;
+          
+          // Wait a bit to see immediate changes
+          setTimeout(() => {
+            const newButtons = panel.querySelectorAll('button');
+            console.log(`  ${domainName}: After click, now ${newButtons.length} buttons (was ${panelButtons.length})`);
+          }, 1000);
         }
       });
     });

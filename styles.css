@@ -307,6 +307,25 @@ body {
     background: #fafafa;
 }
 
+/* Link Tracking Section */
+.link-tracking-section {
+    border-bottom: 1px solid #e2e8f0;
+    background: #f0f8ff;
+}
+
+.link-tracking-header {
+    padding: 1rem 1.5rem 0;
+}
+
+.link-tracking-header h4 {
+    color: #2d3748;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
 .nameservers-header {
     display: flex;
     justify-content: space-between;

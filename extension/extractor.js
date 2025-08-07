@@ -97,6 +97,65 @@
     
     return domainData;
   }
+
+  // Extract link tracking records from the Link Tracking section
+  async function extractLinkTracking() {
+    const linkTrackingData = [];
+    
+    console.log('--- Extracting Link Tracking Records ---');
+    
+    // Look for the Link Tracking button to see if we're on the right page
+    const linkTrackingButton = Array.from(document.querySelectorAll('button')).find(btn => 
+      btn.textContent.trim() === 'Link Tracking'
+    );
+    
+    if (!linkTrackingButton) {
+      console.log('Link Tracking section not found on this page');
+      return linkTrackingData;
+    }
+    
+    // Click the Link Tracking button if it's not active
+    if (!linkTrackingButton.classList.contains('active')) {
+      console.log('Clicking Link Tracking button');
+      linkTrackingButton.click();
+      await sleep(1000);
+    }
+    
+    // Look for link tracking records
+    const copyToClipboardContainers = document.querySelectorAll('.copy-to-clipboard');
+    
+    copyToClipboardContainers.forEach((container, index) => {
+      const hostInput = container.querySelector('input[aria-label="Record host name"]');
+      
+      if (hostInput) {
+        const hostValue = hostInput.value.trim();
+        console.log(`Found link tracking host: ${hostValue}`);
+        
+        // Try to find the associated domain by looking at nearby elements or context
+        // This might need adjustment based on the actual DOM structure
+        const panelElement = container.closest('.fly-panel');
+        if (panelElement) {
+          const titleElement = panelElement.querySelector('h3.fly-panel-title, .fly-panel-title, h3');
+          const domainName = titleElement ? titleElement.textContent.trim() : null;
+          
+          if (domainName && domainName.includes('.')) {
+            linkTrackingData.push({
+              domain: domainName,
+              linkTracking: {
+                type: 'CNAME',
+                host: hostValue,
+                value: 'e-eu.customeriomail.com' // Default, might need to extract actual value
+              }
+            });
+            
+            console.log(`Link tracking for ${domainName}: CNAME ${hostValue} -> e-eu.customeriomail.com`);
+          }
+        }
+      }
+    });
+    
+    return linkTrackingData;
+  }
   
   try {
     // Check if we're on the right page
@@ -133,6 +192,10 @@
     console.log('--- Extracting after expansion ---');
     let expandedResults = await extractAllDomains();
     
+    // Step 3: Extract link tracking data
+    console.log('--- Extracting Link Tracking data ---');
+    const linkTrackingResults = await extractLinkTracking();
+    
     // Combine results - use expanded version if it has more records for any domain
     const finalResults = [];
     const allDomainNames = new Set([
@@ -143,12 +206,23 @@
     for (const domainName of allDomainNames) {
       const initialData = initialResults.find(r => r.domain === domainName);
       const expandedData = expandedResults.find(r => r.domain === domainName);
+      const linkTrackingData = linkTrackingResults.find(r => r.domain === domainName);
       
       // Use whichever has more records
+      let domainResult;
       if (expandedData && (!initialData || expandedData.expected.length > initialData.expected.length)) {
-        finalResults.push(expandedData);
+        domainResult = expandedData;
       } else if (initialData) {
-        finalResults.push(initialData);
+        domainResult = initialData;
+      }
+      
+      // Add link tracking data if available
+      if (linkTrackingData && domainResult) {
+        domainResult.linkTracking = linkTrackingData.linkTracking;
+      }
+      
+      if (domainResult) {
+        finalResults.push(domainResult);
       }
     }
     

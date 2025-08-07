@@ -65,13 +65,14 @@ class CIODNSChecker {
     }
 
     async processDomain(domainData) {
-        const { domain, expected } = domainData;
+        const { domain, expected, linkTracking } = domainData;
         
         try {
             // Initialize result structure
             this.results[domain] = {
                 domain,
                 expected,
+                linkTracking,
                 actual: {},
                 nameservers: [],
                 provider: 'Unknown',
@@ -302,6 +303,35 @@ class CIODNSChecker {
         result.matches = [];
         result.mismatches = [];
         result.extras = [];
+        result.linkTrackingMatch = null;
+
+        // Process link tracking separately if available
+        if (result.linkTracking) {
+            const linkTrackingRecord = result.linkTracking;
+            const cnameRecords = actual.CNAME || [];
+            
+            // Find matching CNAME record
+            const matchingCname = cnameRecords.find(record => 
+                record.host === linkTrackingRecord.host && 
+                (record.value === 'e.customeriomail.com' || record.value === 'e-eu.customeriomail.com')
+            );
+            
+            if (matchingCname) {
+                result.linkTrackingMatch = {
+                    expected: linkTrackingRecord,
+                    actual: matchingCname,
+                    status: 'pass'
+                };
+                console.log(`Link tracking match found for ${domain}: ${linkTrackingRecord.host} -> ${matchingCname.value}`);
+            } else {
+                result.linkTrackingMatch = {
+                    expected: linkTrackingRecord,
+                    actual: null,
+                    status: 'fail'
+                };
+                console.log(`Link tracking record missing for ${domain}: ${linkTrackingRecord.host}`);
+            }
+        }
 
         // For verified domains with no expected records, categorize found records
         if (expected.length === 0) {
@@ -315,12 +345,19 @@ class CIODNSChecker {
             
             for (const [type, records] of Object.entries(actual)) {
                 for (const actualRecord of records) {
+                    // Skip if this CNAME is already handled as link tracking
+                    if (type === 'CNAME' && result.linkTracking && 
+                        actualRecord.host === result.linkTracking.host) {
+                        continue;
+                    }
+                    
                     // Check if this record matches Customer.io patterns
                     let isCustomerIoRecord = customerIoExpectedPatterns.some(pattern => 
                         pattern.type === type && pattern.hostPattern.test(actualRecord.host)
                     );
                     
                     // Special case for CNAME records - check if they point to Customer.io tracking domains
+                    // but exclude ones that are already handled as link tracking
                     if (type === 'CNAME' && !isCustomerIoRecord) {
                         const customerIoTrackingDomains = /^e(-eu)?\.customeriomail\.com$/;
                         if (customerIoTrackingDomains.test(actualRecord.value)) {
@@ -516,6 +553,7 @@ class CIODNSChecker {
             
             ${this.createNameserversSection(result)}
             ${this.createRecordsSection(result)}
+            ${this.createLinkTrackingSection(result)}
             ${this.createDomainFooter(domain)}
         `;
         
@@ -580,6 +618,55 @@ class CIODNSChecker {
                 <div class="nameservers-list">
                     ${nameserversList}
                 </div>
+            </div>
+        `;
+    }
+
+    createLinkTrackingSection(result) {
+        if (!result.linkTrackingMatch) {
+            return '';
+        }
+
+        const linkTracking = result.linkTrackingMatch;
+        const statusIcon = linkTracking.status === 'pass' ? '✅' : '❌';
+        const actualValue = linkTracking.actual ? linkTracking.actual.value : '-';
+        const expectedValue = linkTracking.expected.value;
+
+        return `
+            <div class="link-tracking-section">
+                <div class="link-tracking-header">
+                    <h4>🔗 Link Tracking</h4>
+                </div>
+                <table class="records-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Host</th>
+                            <th>Expected</th>
+                            <th>Actual</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="record-type">${linkTracking.expected.type}</span></td>
+                            <td><code class="record-host">${linkTracking.expected.host}</code></td>
+                            <td>
+                                <code class="record-value">${expectedValue}</code>
+                                <button class="copy-btn" onclick="app.copyToClipboard('${expectedValue}')">Copy</button>
+                            </td>
+                            <td>
+                                <code class="record-value">${actualValue}</code>
+                                ${actualValue !== '-' ? `<button class="copy-btn" onclick="app.copyToClipboard('${actualValue}')">Copy</button>` : ''}
+                            </td>
+                            <td>
+                                <div class="record-status">
+                                    <span class="status-icon">${statusIcon}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         `;
     }

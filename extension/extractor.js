@@ -39,23 +39,21 @@
           const input = allInputs[i];
           const ariaLabel = input.getAttribute('aria-label') || '';
           
-          // Skip if this appears to be in the link tracking section
-          // Check if this input is inside a link tracking related container
+          // Only skip inputs that are specifically in copy-to-clipboard containers 
+          // (which are used for link tracking, not regular DNS records)
           let isLinkTrackingInput = false;
           let parent = input.parentElement;
-          for (let j = 0; j < 10 && parent; j++) {
-            const parentText = parent.textContent || '';
-            if (parentText.includes('Link Tracking') || 
-                parent.classList.contains('copy-to-clipboard')) {
+          for (let j = 0; j < 3 && parent; j++) { // Reduced depth to be more specific
+            if (parent.classList.contains('copy-to-clipboard')) {
               isLinkTrackingInput = true;
               break;
             }
             parent = parent.parentElement;
           }
           
-          // Skip link tracking inputs - they'll be handled separately
+          // Skip only inputs that are definitely in link tracking copy-to-clipboard containers
           if (isLinkTrackingInput) {
-            console.log(`Skipping link tracking input: ${ariaLabel}`);
+            console.log(`Skipping link tracking copy-to-clipboard input: ${ariaLabel}`);
             continue;
           }
           
@@ -74,13 +72,8 @@
               let host = hostInput.value.trim().replace(/\.$/, '');
               let value = valueInput.value.trim().replace(/\.$/, '');
               
-              // Skip if this looks like a Customer.io link tracking CNAME
-              if (recordType === 'CNAME' && 
-                  (value === 'e.customeriomail.com' || value === 'e-eu.customeriomail.com')) {
-                console.log(`Skipping Customer.io link tracking CNAME: ${host} -> ${value}`);
-                i += 2; // Skip the host and value inputs
-                continue;
-              }
+              // Note: We used to skip Customer.io link tracking CNAMEs here, but that was too aggressive
+              // Let the copy-to-clipboard container detection handle the separation instead
               
               // For MX records, include priority in the value
               if (recordType === 'MX' && priorityInput && 

@@ -257,7 +257,25 @@ class CIODNSChecker {
     }
 
     recordsMatch(record1, record2) {
-        const normalize = (str) => str.toLowerCase().trim().replace(/\.$/, '');
+        const normalize = (str) => {
+            let normalized = str.toLowerCase().trim().replace(/\.$/, '');
+            
+            // Special handling for SPF records - normalize whitespace around SPF components
+            if (normalized.startsWith('v=spf1')) {
+                // Add spaces around SPF mechanisms if missing
+                normalized = normalized
+                    .replace(/v=spf1include:/g, 'v=spf1 include:')
+                    .replace(/v=spf1redirect=/g, 'v=spf1 redirect=')
+                    .replace(/~all$/, ' ~all')
+                    .replace(/-all$/, ' -all')
+                    .replace(/\+all$/, ' +all')
+                    .replace(/\?all$/, ' ?all')
+                    // Normalize multiple spaces to single spaces
+                    .replace(/\s+/g, ' ');
+            }
+            
+            return normalized;
+        };
         
         const host1 = normalize(record1.host || '@');
         const host2 = normalize(record2.host || '@');

@@ -1,10 +1,13 @@
 // CIO DNS Checker - Main Application
+// Version: 2.0.1 - SPF Debug Edition - 2025-08-11
 class CIODNSChecker {
     constructor() {
         this.data = null;
         this.results = {};
         this.debugInfo = {};
+        this.version = "2.0.1-spf-debug";
         
+        console.log(`🔍 CIO DNS Checker v${this.version} initialized`);
         this.init();
     }
 
@@ -259,9 +262,12 @@ class CIODNSChecker {
     recordsMatch(record1, record2) {
         const normalize = (str) => {
             let normalized = str.toLowerCase().trim().replace(/\.$/, '');
+            const original = normalized;
             
             // Special handling for SPF records - normalize whitespace around SPF components
             if (normalized.startsWith('v=spf1')) {
+                console.log(`🔧 SPF normalization for: "${original}"`);
+                
                 // Add spaces around SPF mechanisms if missing
                 normalized = normalized
                     .replace(/v=spf1include:/g, 'v=spf1 include:')
@@ -272,6 +278,12 @@ class CIODNSChecker {
                     .replace(/\?all$/, ' ?all')
                     // Normalize multiple spaces to single spaces
                     .replace(/\s+/g, ' ');
+                
+                if (original !== normalized) {
+                    console.log(`✨ SPF normalized: "${original}" → "${normalized}"`);
+                } else {
+                    console.log(`📝 SPF unchanged: "${normalized}"`);
+                }
             }
             
             return normalized;
@@ -282,7 +294,21 @@ class CIODNSChecker {
         const value1 = normalize(record1.value);
         const value2 = normalize(record2.value);
         
-        return host1 === host2 && value1 === value2;
+        const hostMatch = host1 === host2;
+        const valueMatch = value1 === value2;
+        const overallMatch = hostMatch && valueMatch;
+        
+        // Debug logging for record matching
+        if (record1.value && record1.value.includes('spf1')) {
+            console.log(`🔍 SPF Record Match Debug:`);
+            console.log(`  Expected: host="${record1.host}" value="${record1.value}"`);
+            console.log(`  Actual:   host="${record2.host}" value="${record2.value}"`);
+            console.log(`  Normalized Expected: host="${host1}" value="${value1}"`);
+            console.log(`  Normalized Actual:   host="${host2}" value="${value2}"`);
+            console.log(`  Host Match: ${hostMatch}, Value Match: ${valueMatch}, Overall: ${overallMatch}`);
+        }
+        
+        return overallMatch;
     }
 
     // Provider Inference

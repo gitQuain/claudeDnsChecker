@@ -1,13 +1,10 @@
 // CIO DNS Checker - Main Application
-// Version: 2.0.1 - SPF Debug Edition - 2025-08-11
 class CIODNSChecker {
     constructor() {
         this.data = null;
         this.results = {};
         this.debugInfo = {};
-        this.version = "2.0.1-spf-debug";
-        
-        console.log(`🔍 CIO DNS Checker v${this.version} initialized`);
+        console.log(`🔍 CIO DNS Checker initialized`);
         this.init();
     }
 

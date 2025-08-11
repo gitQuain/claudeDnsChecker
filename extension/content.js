@@ -1,63 +1,6 @@
 // Content script - runs on Customer.io pages to provide additional functionality
 
-// Add visual indicator when extension is active
-function addExtensionIndicator() {
-  // Only add indicator on sending domains pages
-  if (!window.location.pathname.includes('sending_domains') && 
-      !window.location.pathname.includes('domains')) {
-    return;
-  }
-  
-  // Check if indicator already exists
-  if (document.getElementById('cio-dns-indicator')) {
-    return;
-  }
-  
-  const indicator = document.createElement('div');
-  indicator.id = 'cio-dns-indicator';
-  indicator.innerHTML = `
-    <div style="
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: #4299e1;
-      color: white;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 500;
-      z-index: 10000;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      transition: all 0.3s ease;
-      cursor: pointer;
-    " title="Right-click anywhere on this page and select 'Extract DNS Records'">
-      🔍 CIO DNS Extractor Ready
-    </div>
-  `;
-  
-  document.body.appendChild(indicator);
-  
-  // Add click handler to show instructions
-  indicator.addEventListener('click', () => {
-    showInstructions();
-  });
-  
-  // Auto-hide after 5 seconds
-  setTimeout(() => {
-    if (indicator.parentNode) {
-      indicator.style.opacity = '0';
-      indicator.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (indicator.parentNode) {
-          indicator.remove();
-        }
-      }, 300);
-    }
-  }, 5000);
-}
+// Visual indicator removed per user request
 
 function showInstructions() {
   // Remove existing instructions
@@ -119,93 +62,7 @@ function showInstructions() {
   document.body.appendChild(instructions);
 }
 
-// Add floating action button as alternative to right-click
-function addFloatingButton() {
-  // Only add on sending domains pages
-  if (!window.location.pathname.includes('sending_domains') && 
-      !window.location.pathname.includes('domains')) {
-    return;
-  }
-  
-  // Check if button already exists
-  if (document.getElementById('cio-dns-fab')) {
-    return;
-  }
-  
-  const fab = document.createElement('div');
-  fab.id = 'cio-dns-fab';
-  fab.innerHTML = `
-    <button style="
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      width: 56px;
-      height: 56px;
-      border-radius: 50%;
-      background: #4299e1;
-      color: white;
-      border: none;
-      font-size: 20px;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
-      z-index: 10000;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    " title="Extract DNS Records" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-      🔍
-    </button>
-  `;
-  
-  fab.addEventListener('click', async () => {
-    try {
-      // Show loading state
-      const button = fab.querySelector('button');
-      const originalContent = button.innerHTML;
-      button.innerHTML = '⏳';
-      button.disabled = true;
-      
-      // Execute extraction
-      const result = await new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.src = chrome.runtime.getURL('extractor.js');
-        script.onload = () => {
-          // The script will return a result
-          resolve(script.result || { success: false, error: 'No result returned' });
-          script.remove();
-        };
-        document.head.appendChild(script);
-      });
-      
-      // Send result to background script
-      if (result.success) {
-        chrome.runtime.sendMessage({
-          type: 'DNS_EXTRACTED',
-          payload: result.payload
-        });
-      } else {
-        chrome.runtime.sendMessage({
-          type: 'EXTRACTION_ERROR',
-          error: result.error
-        });
-      }
-      
-      // Restore button
-      button.innerHTML = originalContent;
-      button.disabled = false;
-      
-    } catch (error) {
-      console.error('Error in floating button:', error);
-      chrome.runtime.sendMessage({
-        type: 'EXTRACTION_ERROR',
-        error: error.message
-      });
-    }
-  });
-  
-  document.body.appendChild(fab);
-}
+// Floating action button removed per user request
 
 // Initialize when page loads
 function initialize() {
@@ -215,11 +72,7 @@ function initialize() {
     return;
   }
   
-  // Add visual indicators
-  setTimeout(() => {
-    addExtensionIndicator();
-    addFloatingButton();
-  }, 1000);
+  // Visual indicators removed per user request
 }
 
 // Handle navigation in SPA
@@ -227,10 +80,7 @@ let currentUrl = window.location.href;
 const observer = new MutationObserver(() => {
   if (window.location.href !== currentUrl) {
     currentUrl = window.location.href;
-    setTimeout(() => {
-      addExtensionIndicator();
-      addFloatingButton();
-    }, 1000);
+    // Visual indicators removed per user request
   }
 });
 

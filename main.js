@@ -1,10 +1,13 @@
 // CIO DNS Checker - Main Application
+// Version: 2.0.1 - SPF Debug Edition - 2025-08-11
 class CIODNSChecker {
     constructor() {
         this.data = null;
         this.results = {};
         this.debugInfo = {};
+        this.version = "2.0.1-spf-debug";
         
+        console.log(`🔍 CIO DNS Checker v${this.version} initialized`);
         this.init();
     }
 
@@ -65,14 +68,13 @@ class CIODNSChecker {
     }
 
     async processDomain(domainData) {
-        const { domain, expected, linkTracking } = domainData;
+        const { domain, expected } = domainData;
         
         try {
             // Initialize result structure
             this.results[domain] = {
                 domain,
                 expected,
-                linkTracking,
                 actual: {},
                 nameservers: [],
                 provider: 'Unknown',
@@ -132,26 +134,13 @@ class CIODNSChecker {
     }
 
     async fetchDNSRecords(domain, expectedRecords) {
-        // Get record types from expected records
-        const expectedTypes = [...new Set(expectedRecords.map(r => r.type))];
-        
-        // For domains with no expected records (verified domains), fetch common types
-        const commonTypes = ['MX', 'TXT', 'A', 'CNAME'];
-        const typesToFetch = expectedTypes.length > 0 ? expectedTypes : commonTypes;
-        
-        console.log(`Fetching record types for ${domain}:`, typesToFetch);
+        const recordTypes = [...new Set(expectedRecords.map(r => r.type))];
         const actual = {};
 
         // Fetch each record type
-        for (const type of typesToFetch) {
+        for (const type of recordTypes) {
             try {
-                if (expectedRecords.length > 0) {
-                    // For unverified domains, use expected records to guide queries
-                    actual[type] = await this.fetchRecordType(domain, type, expectedRecords);
-                } else {
-                    // For verified domains, fetch from root domain and common subdomains
-                    actual[type] = await this.fetchRecordTypeForVerified(domain, type);
-                }
+                actual[type] = await this.fetchRecordType(domain, type, expectedRecords);
             } catch (error) {
                 console.error(`Error fetching ${type} records for ${domain}:`, error);
                 actual[type] = [];
@@ -162,93 +151,20 @@ class CIODNSChecker {
     }
 
     async fetchRecordType(domain, type, expectedRecords) {
-        const allRecords = [];
+        // Get all expected records of this type to determine which hosts to query
         const expectedOfType = expectedRecords.filter(r => r.type === type);
+        const hosts = [...new Set(expectedOfType.map(r => r.host))];
         
-        // For each expected record, query the appropriate DNS name
-        for (const expectedRecord of expectedOfType) {
-            let queryName;
-            
-            // Construct the query name based on the host
-            if (expectedRecord.host === '@') {
-                // Root domain
-                queryName = domain;
-            } else {
-                // Subdomain - the host IS the subdomain prefix
-                queryName = `${expectedRecord.host}.${domain}`;
-            }
-            
-            try {
-                console.log(`Querying ${type} records for: ${queryName} (host: ${expectedRecord.host})`);
-                const response = await fetch(
-                    `https://dns.google/resolve?name=${queryName}&type=${type}`
-                );
-                const data = await response.json();
-                console.log(`DNS response for ${queryName} (${type}):`, data);
-                
-                if (data.Answer) {
-                    const records = data.Answer
-                        .filter(record => record.type === this.getRecordTypeNumber(type))
-                        .map(record => ({
-                            host: expectedRecord.host, // Use the expected host
-                            value: this.formatRecordValue(type, record.data),
-                            ttl: record.TTL
-                        }));
-                    
-                    allRecords.push(...records);
-                    console.log(`Found ${records.length} ${type} records for ${queryName}`);
-                } else {
-                    console.log(`No ${type} records found for ${queryName}`);
-                }
-            } catch (error) {
-                console.error(`Error querying ${type} for ${queryName}:`, error);
-            }
-        }
-
-        return allRecords;
-    }
-
-    async fetchRecordTypeForVerified(domain, type) {
         const allRecords = [];
-        const queries = [];
-        
-        // Always query the root domain first
-        queries.push({ queryName: domain, host: '@' });
-        
-        // Add specific queries based on record type
-        if (type === 'CNAME') {
-            // Common CNAME subdomains
-            const cnameSubdomains = ['email', 'l', 'www', 'mail'];
-            cnameSubdomains.forEach(sub => {
-                queries.push({ queryName: `${sub}.${domain}`, host: sub });
-            });
-        } else if (type === 'TXT') {
-            // Common TXT subdomains
-            queries.push({ queryName: `_dmarc.${domain}`, host: '_dmarc' });
+
+        for (const host of hosts) {
+            const queryName = host === '@' ? domain : `${host}.${domain}`;
             
-            // Always check common Customer.io subdomains for TXT
-            const customerIoSubdomains = ['cioeu118541'];
-            for (const subdomain of customerIoSubdomains) {
-                queries.push({ queryName: `${subdomain}.${domain}`, host: subdomain });
-                queries.push({ 
-                    queryName: `mta._domainkey.${subdomain}.${domain}`, 
-                    host: `mta._domainkey.${subdomain}` 
-                });
-            }
-        } else if (type === 'MX') {
-            // For MX records, always check Customer.io subdomain
-            queries.push({ queryName: `cioeu118541.${domain}`, host: 'cioeu118541' });
-        }
-        
-        // Query each location
-        for (const { queryName, host } of queries) {
             try {
-                console.log(`Querying ${type} records for verified domain: ${queryName}`);
                 const response = await fetch(
                     `https://dns.google/resolve?name=${queryName}&type=${type}`
                 );
                 const data = await response.json();
-                console.log(`DNS response for ${queryName} (${type}):`, data);
                 
                 if (data.Answer) {
                     const records = data.Answer
@@ -260,16 +176,14 @@ class CIODNSChecker {
                         }));
                     
                     allRecords.push(...records);
-                    console.log(`Found ${records.length} ${type} records for ${queryName}`);
                 }
             } catch (error) {
                 console.error(`Error querying ${type} for ${queryName}:`, error);
             }
         }
-        
+
         return allRecords;
     }
-
 
     getRecordTypeNumber(type) {
         const types = {
@@ -303,130 +217,6 @@ class CIODNSChecker {
         result.matches = [];
         result.mismatches = [];
         result.extras = [];
-        result.linkTrackingMatch = null;
-
-        // Process link tracking separately if available
-        if (result.linkTracking) {
-            const linkTrackingRecord = result.linkTracking;
-            const cnameRecords = actual.CNAME || [];
-            
-            // Find matching CNAME record
-            const matchingCname = cnameRecords.find(record => 
-                record.host === linkTrackingRecord.host && 
-                (record.value === 'e.customeriomail.com' || record.value === 'e-eu.customeriomail.com')
-            );
-            
-            if (matchingCname) {
-                result.linkTrackingMatch = {
-                    expected: linkTrackingRecord,
-                    actual: matchingCname,
-                    status: 'pass'
-                };
-                console.log(`Link tracking match found for ${domain}: ${linkTrackingRecord.host} -> ${matchingCname.value}`);
-            } else {
-                result.linkTrackingMatch = {
-                    expected: linkTrackingRecord,
-                    actual: null,
-                    status: 'fail'
-                };
-                console.log(`Link tracking record missing for ${domain}: ${linkTrackingRecord.host}`);
-            }
-        } else {
-            // If no link tracking was extracted, check if this domain has any Customer.io tracking CNAMEs
-            // and try to infer which one belongs to this domain
-            const cnameRecords = actual.CNAME || [];
-            const trackingCnames = cnameRecords.filter(record => 
-                record.value === 'e.customeriomail.com' || record.value === 'e-eu.customeriomail.com'
-            );
-            
-            if (trackingCnames.length > 0) {
-                // Heuristic: 'l' typically belongs to primary domains, 'email' to test domains
-                let bestMatch = null;
-                
-                if (domain.includes('test')) {
-                    // For test domains, prefer 'email' host
-                    bestMatch = trackingCnames.find(c => c.host === 'email') || trackingCnames[0];
-                } else {
-                    // For primary domains, prefer 'l' host
-                    bestMatch = trackingCnames.find(c => c.host === 'l') || trackingCnames[0];
-                }
-                
-                if (bestMatch) {
-                    console.log(`Inferred link tracking for ${domain}: ${bestMatch.host} -> ${bestMatch.value}`);
-                    result.linkTrackingMatch = {
-                        expected: {
-                            host: bestMatch.host,
-                            type: 'CNAME',
-                            value: bestMatch.value
-                        },
-                        actual: bestMatch,
-                        status: 'pass'
-                    };
-                }
-            }
-        }
-
-        // For verified domains with no expected records, categorize found records
-        if (expected.length === 0) {
-            // Define what Customer.io typically expects
-            const customerIoExpectedPatterns = [
-                { type: 'MX', hostPattern: /^cioeu\d+$/ },
-                { type: 'TXT', hostPattern: /^cioeu\d+$/ }, // SPF record
-                { type: 'TXT', hostPattern: /^mta\._domainkey\.cioeu\d+$/ }, // DKIM
-                { type: 'TXT', hostPattern: /^_dmarc$/ } // DMARC
-            ];
-            
-            for (const [type, records] of Object.entries(actual)) {
-                for (const actualRecord of records) {
-                    // Skip if this CNAME is already handled as link tracking for THIS domain
-                    if (type === 'CNAME' && result.linkTracking && 
-                        actualRecord.host === result.linkTracking.host) {
-                        continue;
-                    }
-                    
-                    // Skip Customer.io tracking CNAMEs that belong to other domains
-                    if (type === 'CNAME') {
-                        const customerIoTrackingDomains = /^e(-eu)?\.customeriomail\.com$/;
-                        if (customerIoTrackingDomains.test(actualRecord.value)) {
-                            // This is a Customer.io tracking CNAME, but check if it belongs to this domain
-                            // If it's not this domain's link tracking record, skip it
-                            if (!result.linkTracking || actualRecord.host !== result.linkTracking.host) {
-                                console.log(`Skipping Customer.io tracking CNAME ${actualRecord.host} -> ${actualRecord.value} (belongs to different domain)`);
-                                continue;
-                            }
-                        }
-                    }
-                    
-                    // Check if this record matches Customer.io patterns
-                    let isCustomerIoRecord = customerIoExpectedPatterns.some(pattern => 
-                        pattern.type === type && pattern.hostPattern.test(actualRecord.host)
-                    );
-                    
-                    // Note: We don't need the special CNAME case anymore since we handle it above
-                    
-                    if (isCustomerIoRecord) {
-                        // This is an expected Customer.io record
-                        result.matches.push({
-                            expected: {
-                                type: type,
-                                host: actualRecord.host,
-                                value: actualRecord.value
-                            },
-                            actual: actualRecord,
-                            status: 'pass'
-                        });
-                    } else {
-                        // This is an extra record (not required by Customer.io)
-                        result.extras.push({
-                            type,
-                            ...actualRecord,
-                            status: 'extra'
-                        });
-                    }
-                }
-            }
-            return;
-        }
 
         // Check each expected record
         for (const expectedRecord of expected) {
@@ -470,14 +260,55 @@ class CIODNSChecker {
     }
 
     recordsMatch(record1, record2) {
-        const normalize = (str) => str.toLowerCase().trim().replace(/\.$/, '');
+        const normalize = (str) => {
+            let normalized = str.toLowerCase().trim().replace(/\.$/, '');
+            const original = normalized;
+            
+            // Special handling for SPF records - normalize whitespace around SPF components
+            if (normalized.startsWith('v=spf1')) {
+                console.log(`🔧 SPF normalization for: "${original}"`);
+                
+                // Add spaces around SPF mechanisms if missing
+                normalized = normalized
+                    .replace(/v=spf1include:/g, 'v=spf1 include:')
+                    .replace(/v=spf1redirect=/g, 'v=spf1 redirect=')
+                    .replace(/~all$/, ' ~all')
+                    .replace(/-all$/, ' -all')
+                    .replace(/\+all$/, ' +all')
+                    .replace(/\?all$/, ' ?all')
+                    // Normalize multiple spaces to single spaces
+                    .replace(/\s+/g, ' ');
+                
+                if (original !== normalized) {
+                    console.log(`✨ SPF normalized: "${original}" → "${normalized}"`);
+                } else {
+                    console.log(`📝 SPF unchanged: "${normalized}"`);
+                }
+            }
+            
+            return normalized;
+        };
         
         const host1 = normalize(record1.host || '@');
         const host2 = normalize(record2.host || '@');
         const value1 = normalize(record1.value);
         const value2 = normalize(record2.value);
         
-        return host1 === host2 && value1 === value2;
+        const hostMatch = host1 === host2;
+        const valueMatch = value1 === value2;
+        const overallMatch = hostMatch && valueMatch;
+        
+        // Debug logging for record matching
+        if (record1.value && record1.value.includes('spf1')) {
+            console.log(`🔍 SPF Record Match Debug:`);
+            console.log(`  Expected: host="${record1.host}" value="${record1.value}"`);
+            console.log(`  Actual:   host="${record2.host}" value="${record2.value}"`);
+            console.log(`  Normalized Expected: host="${host1}" value="${value1}"`);
+            console.log(`  Normalized Actual:   host="${host2}" value="${value2}"`);
+            console.log(`  Host Match: ${hostMatch}, Value Match: ${valueMatch}, Overall: ${overallMatch}`);
+        }
+        
+        return overallMatch;
     }
 
     // Provider Inference
@@ -592,7 +423,6 @@ class CIODNSChecker {
             
             ${this.createNameserversSection(result)}
             ${this.createRecordsSection(result)}
-            ${this.createLinkTrackingSection(result)}
             ${this.createDomainFooter(domain)}
         `;
         
@@ -661,55 +491,6 @@ class CIODNSChecker {
         `;
     }
 
-    createLinkTrackingSection(result) {
-        if (!result.linkTrackingMatch) {
-            return '';
-        }
-
-        const linkTracking = result.linkTrackingMatch;
-        const statusIcon = linkTracking.status === 'pass' ? '✅' : '❌';
-        const actualValue = linkTracking.actual ? linkTracking.actual.value : '-';
-        const expectedValue = linkTracking.expected.value;
-
-        return `
-            <div class="link-tracking-section">
-                <div class="link-tracking-header">
-                    <h4>🔗 Link Tracking</h4>
-                </div>
-                <table class="records-table">
-                    <thead>
-                        <tr>
-                            <th>Type</th>
-                            <th>Host</th>
-                            <th>Expected</th>
-                            <th>Actual</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><span class="record-type">${linkTracking.expected.type}</span></td>
-                            <td><code class="record-host">${linkTracking.expected.host}</code></td>
-                            <td>
-                                <code class="record-value">${expectedValue}</code>
-                                <button class="copy-btn" onclick="app.copyToClipboard('${expectedValue}')">Copy</button>
-                            </td>
-                            <td>
-                                <code class="record-value">${actualValue}</code>
-                                ${actualValue !== '-' ? `<button class="copy-btn" onclick="app.copyToClipboard('${actualValue}')">Copy</button>` : ''}
-                            </td>
-                            <td>
-                                <div class="record-status">
-                                    <span class="status-icon">${statusIcon}</span>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        `;
-    }
-
     createRecordsSection(result) {
         if (result.status === 'loading') {
             return `
@@ -725,26 +506,14 @@ class CIODNSChecker {
         const allRecords = [
             ...result.matches.map(m => ({ ...m.expected, status: 'pass', actual: m.actual })),
             ...result.mismatches.map(m => ({ ...m.expected, status: 'fail', actual: null })),
-            ...result.extras.map(e => ({ 
-                type: e.type, 
-                host: e.host, 
-                value: e.value, 
-                status: e.status, // Use the actual status (info, extra, etc)
-                actual: e 
-            }))
+            ...result.extras.map(e => ({ type: e.type, host: e.host, value: e.value, status: 'extra', actual: e }))
         ];
 
         if (allRecords.length === 0) {
             return `
                 <div class="records-section">
                     <div style="padding: 2rem; text-align: center; color: #718096;">
-                        <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">📭</div>
-                        <div style="font-weight: 500;">No DNS records found</div>
-                        <div style="font-size: 0.875rem; margin-top: 0.5rem; opacity: 0.8;">
-                            ${result.expected.length === 0 ? 
-                                'This domain has no Customer.io DNS records configured.' : 
-                                'The expected DNS records are missing from this domain.'}
-                        </div>
+                        No DNS records found for this domain.
                     </div>
                 </div>
             `;
@@ -780,8 +549,7 @@ class CIODNSChecker {
         };
 
         const actualValue = record.actual ? record.actual.value : '-';
-        // For extra records, don't show expected value
-        const expectedValue = record.status === 'extra' ? '-' : (record.value || '-');
+        const expectedValue = record.value || '-';
 
         return `
             <tr>
@@ -797,7 +565,7 @@ class CIODNSChecker {
                 </td>
                 <td>
                     <div class="record-status">
-                        <span class="status-icon">${statusIcons[record.status] || '❓'}</span>
+                        <span class="status-icon">${statusIcons[record.status]}</span>
                     </div>
                 </td>
             </tr>
@@ -910,13 +678,7 @@ class CIODNSChecker {
             const allRecords = [
                 ...result.matches.map(m => ({ ...m.expected, status: 'Pass', actual: m.actual })),
                 ...result.mismatches.map(m => ({ ...m.expected, status: 'Fail', actual: null })),
-                ...result.extras.map(e => ({ 
-                    type: e.type, 
-                    host: e.host, 
-                    value: e.value, 
-                    status: 'Extra', 
-                    actual: e 
-                }))
+                ...result.extras.map(e => ({ type: e.type, host: e.host, value: e.value, status: 'Extra', actual: e }))
             ];
 
             for (const record of allRecords) {

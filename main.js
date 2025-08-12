@@ -318,20 +318,110 @@ class CIODNSChecker {
 
         const ns = nameservers.join(' ').toLowerCase();
         
-        if (ns.includes('cloudflare')) {
-            this.results[domain].provider = 'Cloudflare';
-        } else if (ns.includes('awsdns')) {
-            this.results[domain].provider = 'Route 53';
-        } else if (ns.includes('worldsecuresystems') || ns.includes('godaddy')) {
-            this.results[domain].provider = 'GoDaddy';
-        } else if (ns.includes('googledomains') || ns.includes('google')) {
-            this.results[domain].provider = 'Google Domains';
-        } else if (ns.includes('azure') || ns.includes('microsoft')) {
-            this.results[domain].provider = 'Azure DNS';
-        } else {
-            // Show first nameserver as fallback
-            this.results[domain].provider = nameservers[0];
+        // Comprehensive nameserver to provider mapping
+        const providerPatterns = [
+            // Major Cloud Providers
+            { patterns: ['cloudflare'], provider: 'Cloudflare' },
+            { patterns: ['awsdns'], provider: 'AWS Route 53' },
+            { patterns: ['azure', 'microsoft'], provider: 'Azure DNS' },
+            { patterns: ['googledomains', 'google'], provider: 'Google Domains' },
+            
+            // Domain Registrars
+            { patterns: ['godaddy', 'worldsecuresystems'], provider: 'GoDaddy' },
+            { patterns: ['namecheap'], provider: 'Namecheap' },
+            { patterns: ['name.com', 'name-services'], provider: 'Name.com' },
+            { patterns: ['hover'], provider: 'Hover' },
+            { patterns: ['dynadot'], provider: 'Dynadot' },
+            { patterns: ['porkbun'], provider: 'Porkbun' },
+            { patterns: ['gandi'], provider: 'Gandi' },
+            { patterns: ['enom'], provider: 'eNom' },
+            { patterns: ['networksolutions'], provider: 'Network Solutions' },
+            { patterns: ['register.com'], provider: 'Register.com' },
+            
+            // CDN/Hosting Providers
+            { patterns: ['akam', 'akamai'], provider: 'Akamai' },
+            { patterns: ['fastly'], provider: 'Fastly' },
+            { patterns: ['maxcdn'], provider: 'MaxCDN' },
+            { patterns: ['keycdn'], provider: 'KeyCDN' },
+            
+            // Hosting Companies
+            { patterns: ['bluehost'], provider: 'Bluehost' },
+            { patterns: ['hostgator'], provider: 'HostGator' },
+            { patterns: ['siteground'], provider: 'SiteGround' },
+            { patterns: ['wpengine'], provider: 'WP Engine' },
+            { patterns: ['kinsta'], provider: 'Kinsta' },
+            { patterns: ['dreamhost'], provider: 'DreamHost' },
+            { patterns: ['a2hosting'], provider: 'A2 Hosting' },
+            { patterns: ['inmotionhosting'], provider: 'InMotion Hosting' },
+            { patterns: ['hostinger'], provider: 'Hostinger' },
+            { patterns: ['1and1', '1&1', 'ionos'], provider: '1&1 IONOS' },
+            { patterns: ['ovh'], provider: 'OVH' },
+            { patterns: ['hetzner'], provider: 'Hetzner' },
+            { patterns: ['vultr'], provider: 'Vultr' },
+            { patterns: ['linode'], provider: 'Linode' },
+            { patterns: ['digitalocean'], provider: 'DigitalOcean' },
+            
+            // Specialized DNS Providers
+            { patterns: ['dnsimple'], provider: 'DNSimple' },
+            { patterns: ['dnsmadeeasy'], provider: 'DNS Made Easy' },
+            { patterns: ['ultradns'], provider: 'UltraDNS' },
+            { patterns: ['easydns'], provider: 'EasyDNS' },
+            { patterns: ['he.net', 'hurricane'], provider: 'Hurricane Electric' },
+            { patterns: ['afraid.org'], provider: 'FreeDNS' },
+            
+            // Country-specific providers
+            { patterns: ['one.com'], provider: 'One.com' },
+            { patterns: ['hosteurope'], provider: 'Host Europe' },
+            { patterns: ['strato'], provider: 'Strato' },
+            { patterns: ['netim'], provider: 'Netim' },
+            { patterns: ['online.net'], provider: 'Online.net' },
+            { patterns: ['scaleway'], provider: 'Scaleway' },
+            
+            // Enterprise/Corporate
+            { patterns: ['verisign'], provider: 'Verisign' },
+            { patterns: ['markmonitor'], provider: 'MarkMonitor' },
+            { patterns: ['cscdbs'], provider: 'CSC Corporate Domains' },
+            { patterns: ['neustar'], provider: 'Neustar' },
+            
+            // Regional providers
+            { patterns: ['registrar-servers.com'], provider: 'Registrar Servers' },
+            { patterns: ['domaincontrol.com'], provider: 'GoDaddy' },
+            { patterns: ['dns.hostinger'], provider: 'Hostinger' },
+        ];
+
+        // Find matching provider
+        for (const { patterns, provider } of providerPatterns) {
+            if (patterns.some(pattern => ns.includes(pattern))) {
+                this.results[domain].provider = provider;
+                return;
+            }
         }
+
+        // Fallback: try to extract a meaningful name from the nameserver
+        const firstNs = nameservers[0];
+        if (firstNs) {
+            // Extract domain from nameserver (e.g., "ns1.example.com" -> "example.com")
+            const parts = firstNs.split('.');
+            if (parts.length >= 2) {
+                const domain = parts.slice(-2).join('.');
+                
+                // Clean up common nameserver prefixes
+                if (domain.includes('dns') || domain.includes('ns')) {
+                    this.results[domain].provider = this.capitalizeProvider(domain);
+                } else {
+                    // Show the base domain
+                    this.results[domain].provider = this.capitalizeProvider(domain);
+                }
+            } else {
+                this.results[domain].provider = firstNs;
+            }
+        }
+    }
+
+    capitalizeProvider(str) {
+        return str.split('.')[0]
+            .split('-')[0]
+            .replace(/^\w/, c => c.toUpperCase());
     }
 
     calculateDomainStatus(domain) {
@@ -455,11 +545,47 @@ class CIODNSChecker {
 
     getProviderIcon(provider) {
         const icons = {
+            // Cloud Providers
             'Cloudflare': '🟠',
-            'Route 53': '🟡',
-            'GoDaddy': '🟢',
+            'AWS Route 53': '🟡',
+            'Azure DNS': '🔷',
             'Google Domains': '🔵',
-            'Azure DNS': '🔷'
+            
+            // Domain Registrars
+            'GoDaddy': '🟢',
+            'Namecheap': '🟣',
+            'Name.com': '🔴',
+            'Hover': '🟤',
+            'Gandi': '🟫',
+            
+            // CDN/Performance
+            'Akamai': '⚡',
+            'Fastly': '🚀',
+            'MaxCDN': '📡',
+            
+            // Hosting Providers
+            'Bluehost': '💙',
+            'HostGator': '🐊',
+            'SiteGround': '🌍',
+            'WP Engine': '⚙️',
+            'Kinsta': '💜',
+            'DreamHost': '💭',
+            '1&1 IONOS': '🔷',
+            'OVH': '🇫🇷',
+            'Hetzner': '🇩🇪',
+            'DigitalOcean': '🌊',
+            'Linode': '🟦',
+            'Vultr': '⚫',
+            
+            // DNS Specialists
+            'DNSimple': '⚪',
+            'DNS Made Easy': '🎯',
+            'UltraDNS': '🔺',
+            'Hurricane Electric': '🌪️',
+            
+            // Enterprise
+            'Verisign': '✅',
+            'MarkMonitor': '🛡️'
         };
         return icons[provider] || '🌐';
     }
